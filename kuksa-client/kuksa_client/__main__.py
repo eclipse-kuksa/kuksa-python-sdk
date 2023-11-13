@@ -39,7 +39,7 @@ from cmd2 import constants
 from cmd2.utils import basic_complete
 from urllib.parse import urlparse
 
-import kuksa_certificates
+from kuksa_client import kuksa_server_certificates
 from kuksa_client import KuksaClientThread
 from kuksa_client import _metadata
 
@@ -598,7 +598,7 @@ class TestClient(Cmd):
 
         # Explain were we are connecting to:
         print(
-            f"Connecting to VSS server at {config['ip']} port {config['port']} \
+            f"Connecting to VSS server at {config['ip'] } port {config['port'] } \
 using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS' } protocol."
         )
         print(f"TLS will {'not be' if config['insecure'] else 'be'} used.")
@@ -641,9 +641,9 @@ using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS' } protocol."
 
     def getDefaultTokenDir(self):
         try:
-            return os.path.join(kuksa_certificates.__certificate_dir__, "jwt")
+            return os.path.join(kuksa_server_certificates.__certificate_dir__, "jwt")
         except AttributeError:
-            guessTokenDir = os.path.join(scriptDir, "../kuksa_certificates/jwt")
+            guessTokenDir = os.path.join(scriptDir, "kuksa_server_certificates/jwt")
             if os.path.isdir(guessTokenDir):
                 return guessTokenDir
             return "Unknown"

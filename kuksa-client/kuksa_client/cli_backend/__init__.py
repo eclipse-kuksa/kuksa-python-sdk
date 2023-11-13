@@ -17,9 +17,7 @@
 ########################################################################
 
 import pathlib
-
-import kuksa_certificates
-
+from kuksa_client import kuksa_server_certificates
 
 
 class Backend:
@@ -30,7 +28,7 @@ class Backend:
             self.insecure = config.getboolean('insecure', False)
         except AttributeError:
             self.insecure = config.get('insecure', False)
-        self.default_cert_path = pathlib.Path(kuksa_certificates.__path__[0])
+        self.default_cert_path = pathlib.Path(kuksa_server_certificates.__path__[0])
         self.cacertificate = config.get(
             'cacertificate', str(self.default_cert_path / 'CA.pem'))
         self.certificate = config.get('certificate', str(

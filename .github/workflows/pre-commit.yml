@@ -15,6 +15,7 @@ jobs:
         with:
           # required to grab the history of the PR
           fetch-depth: 0
+          submodules: 'true'
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0
         with:

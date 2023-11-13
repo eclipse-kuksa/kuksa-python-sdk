@@ -47,7 +47,6 @@ try:
 
     metadata = importlib_metadata.metadata("kuksa_client")
 
-
     __title__ = metadata["name"]
     __summary__ = metadata["summary"]
     __uri__ = metadata["home-page"]

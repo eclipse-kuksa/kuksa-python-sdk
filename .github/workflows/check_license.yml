@@ -18,6 +18,7 @@ jobs:
       with:
         # required to grab the history of the PR
         fetch-depth: 0
+        submodules: 'true'
 
     - name: Get changed files
       run: |

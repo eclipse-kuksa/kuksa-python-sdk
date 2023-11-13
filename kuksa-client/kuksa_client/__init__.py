@@ -44,7 +44,7 @@ class KuksaClientThread(threading.Thread):
         self.backend.stop()
 
     # Do authorization by passing a jwt token or a token file
-    def authorize(self, token_or_tokenfile: Optional[str]=None, timeout=5):
+    def authorize(self, token_or_tokenfile: Optional[str] = None, timeout=5):
         return self.backend.authorize(token_or_tokenfile, timeout)
 
     # Update VSS Tree Entry
