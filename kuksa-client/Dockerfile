@@ -33,7 +33,7 @@ RUN pyinstaller --collect-data kuksa_certificates  --collect-data kuksa_client -
 # Debian slim versions
 # For development add :debug like this
 # FROM gcr.io/distroless/base-debian12:debug  to get a busybox shell as well
-FROM gcr.io/distroless/base-debian12
+FROM python:3.10-slim-bookworm
 
 COPY --from=build /dist/kuksa-client /kuksa-client
 

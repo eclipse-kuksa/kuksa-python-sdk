@@ -84,6 +84,7 @@ jobs:
         platforms: |
           linux/amd64
           linux/arm64
+          linux/riscv64
         context: .
         file: kuksa-client/Dockerfile
         push: true
@@ -98,6 +99,7 @@ jobs:
         platforms: |
           linux/amd64
           linux/arm64
+          linux/riscv64
         context: .
         file: kuksa-client/Dockerfile
         push: true
