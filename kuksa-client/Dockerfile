@@ -16,8 +16,8 @@ RUN apt update && apt -yy install binutils git
 RUN pip install --upgrade pip build pyinstaller
 
 # We must copy the whole repository otherwise version lookup by tag would not work
-COPY . /kuksa.val/
-WORKDIR /kuksa.val/kuksa-client
+COPY . /kuksa-python-sdk/
+WORKDIR /kuksa-python-sdk/kuksa-client
 
 RUN python3 -m build
 # We install globally on build container, so pyinstaller can easily gather all files
