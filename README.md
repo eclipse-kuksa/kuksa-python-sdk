@@ -1,13 +1,6 @@
 # KUKSA Python SDK
 ![kuksa.val Logo](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/pictures/logo.png)
 
-
-**Note: The KUKSA project is currently in the process of moving the KUKSA Python SDK (kuksa-client)**
-**from the [kuksa.val](https://github.com/eclipse/kuksa.val/tree/master/kuksa-client) repository**
-**to this repository. This repository is still in *draft* status!**
-**Use kuksa.val for development, pull requests and issues until kuksa-client has been removed**
-**from that repository!**
-
 KUKSA Python Client and SDK is a part of the open source project [Eclipse KUKSA](https://www.eclipse.org/kuksa/).
 More about Eclipse KUKSA can be found in the [repository](https://github.com/eclipse/kuksa.val).
 
