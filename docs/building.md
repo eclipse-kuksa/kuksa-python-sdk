@@ -47,12 +47,12 @@ Whenever you want to exit kuksa-client's virtual environment, simply run:
 deactivate
 ```
 
-# Requirements
+# Managing Build Requirements
 
 `kuksa-client` relies on [pip-tools](https://pip-tools.readthedocs.io/en/latest/) to pin requirements versions.
 This guide gives you instructions to pin requirements for python3.8 which is the minimum version kuksa-client supports.
 
-## Upgrade requirements
+## Upgrade Requirements
 
 We're using `pip-tools` against our `setup.cfg` file. This means `pip-tools` will make sure that the versions it will pin
 match constraints from `setup.cfg`.
