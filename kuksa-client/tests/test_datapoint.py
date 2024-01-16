@@ -13,6 +13,8 @@
 
 import pytest
 from kuksa_client.grpc import Datapoint
+from kuksa.val.v1 import types_pb2
+from google.protobuf import timestamp_pb2
 
 #
 # Client rules:
@@ -123,7 +125,7 @@ def test_quotes_in_string_values():
 
 
 def test_quotes_in_string_values_2():
-    """Doubee quotes in double quotes so in total three values"""
+    """Double quotes in double quotes so in total three values"""
     test_str = "['dtc1, dtc2', dtc3, \" dtc4, dtc4\"]"
     my_array = list(Datapoint.cast_array_values(Datapoint.cast_str, test_str))
     assert len(my_array) == 3
@@ -179,3 +181,46 @@ def test_cast_bool():
     assert Datapoint.cast_bool("Ja") is True
     assert Datapoint.cast_bool("Nein") is True
     assert Datapoint.cast_bool("Doch") is True
+
+
+def test_from_message_none():
+    """
+    There shall always be a value
+    """
+    msg = types_pb2.Datapoint()
+    datapoint = Datapoint.from_message(msg)
+    assert datapoint is None
+
+
+def test_from_message_uint32():
+    msg = types_pb2.Datapoint(uint32=456)
+    datapoint = Datapoint.from_message(msg)
+    assert datapoint.value == 456
+
+
+def test_from_message_time():
+    """
+    Make sure that we can handle values out of range (by discarding them)
+    gRPC supports year up to including 9999, so any date in year 10000 or later shall
+    result in that None is returned
+    """
+    # Wed Jan 17 2024 10:02:27 GMT+0000
+    timestamp = timestamp_pb2.Timestamp(seconds=1705485747)
+    msg = types_pb2.Datapoint(uint32=456, timestamp=timestamp)
+    datapoint = Datapoint.from_message(msg)
+    assert datapoint.timestamp.year == 2024
+
+    # Thu Dec 30 9999 07:13:22 GMT+0000
+    timestamp = timestamp_pb2.Timestamp(seconds=253402154002)
+    msg = types_pb2.Datapoint(uint32=456, timestamp=timestamp)
+    datapoint = Datapoint.from_message(msg)
+    assert datapoint.timestamp.year == 9999
+
+    # Sat Jan 29 10000 07:13:22 GMT+0000
+    # Currently the constructors does not check range
+    timestamp = timestamp_pb2.Timestamp(seconds=253404746002)
+    msg = types_pb2.Datapoint(uint32=456, timestamp=timestamp)
+
+    # But the from_message method handle the checks
+    datapoint = Datapoint.from_message(msg)
+    assert datapoint is None

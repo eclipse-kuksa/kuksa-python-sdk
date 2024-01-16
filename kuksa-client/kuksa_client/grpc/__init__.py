@@ -20,7 +20,6 @@ import contextlib
 import dataclasses
 import datetime
 import enum
-import http
 import logging
 import re
 from typing import Any
@@ -164,20 +163,29 @@ class Metadata:
             if message.HasField(field):
                 setattr(metadata, field, getattr(message, field))
         if message.HasField('value_restriction'):
-            value_restriction = getattr(
-                message.value_restriction, message.value_restriction.WhichOneof('type'))
-            metadata.value_restriction = ValueRestriction()
-            for field in ('min', 'max'):
-                if value_restriction.HasField(field):
-                    setattr(metadata.value_restriction, field,
-                            getattr(value_restriction, field))
-            if value_restriction.allowed_values:
-                metadata.value_restriction.allowed_values = list(
-                    value_restriction.allowed_values)
+            restriction_type = message.value_restriction.WhichOneof('type')
+            # Make sure that a type actually is set
+            if restriction_type:
+                value_restriction = getattr(
+                    message.value_restriction, restriction_type)
+                metadata.value_restriction = ValueRestriction()
+                # All types except string support min/max
+                if restriction_type != 'string':
+                    for field in ('min', 'max'):
+                        if value_restriction.HasField(field):
+                            setattr(metadata.value_restriction, field,
+                                    getattr(value_restriction, field))
+                if value_restriction.allowed_values:
+                    metadata.value_restriction.allowed_values = list(
+                        value_restriction.allowed_values)
         return metadata
 
     # pylint: disable=too-many-branches
     def to_message(self, value_type: DataType = DataType.UNSPECIFIED) -> types_pb2.Metadata:
+        """
+        to_message/from_message aligned to use None rather than empty list for
+        representing allowed values in value restrictions
+        """
         message = types_pb2.Metadata(
             data_type=self.data_type.value, entry_type=self.entry_type.value)
         for field in ('description', 'comment', 'deprecation', 'unit'):
@@ -201,7 +209,7 @@ class Metadata:
                 if self.value_restriction.max is not None:
                     message.value_restriction.signed.max = int(
                         self.value_restriction.max)
-                if self.value_restriction.allowed_values is not None:
+                if self.value_restriction.allowed_values:
                     message.value_restriction.signed.allowed_values.extend(
                         (int(value)
                          for value in self.value_restriction.allowed_values),
@@ -222,7 +230,7 @@ class Metadata:
                 if self.value_restriction.max is not None:
                     message.value_restriction.unsigned.max = int(
                         self.value_restriction.max)
-                if self.value_restriction.allowed_values is not None:
+                if self.value_restriction.allowed_values:
                     message.value_restriction.unsigned.allowed_values.extend(
                         (int(value)
                          for value in self.value_restriction.allowed_values),
@@ -239,7 +247,7 @@ class Metadata:
                 if self.value_restriction.max is not None:
                     message.value_restriction.floating_point.max = float(
                         self.value_restriction.max)
-                if self.value_restriction.allowed_values is not None:
+                if self.value_restriction.allowed_values:
                     message.value_restriction.floating_point.allowed_values.extend(
                         (float(value)
                          for value in self.value_restriction.allowed_values),
@@ -248,7 +256,7 @@ class Metadata:
                 DataType.STRING,
                 DataType.STRING_ARRAY,
             ):
-                if self.value_restriction.allowed_values is not None:
+                if self.value_restriction.allowed_values:
                     message.value_restriction.string.allowed_values.extend(
                         (str(value)
                          for value in self.value_restriction.allowed_values),
@@ -308,11 +316,32 @@ class Datapoint:
 
     @classmethod
     def from_message(cls, message: types_pb2.Datapoint):
+        """
+        Return internal Datapoint representation or None on error
+        """
+        if message.WhichOneof('value') is None:
+            logger.warning("No value provided in datapoint!")
+            return None
+
+        if message.HasField('timestamp'):
+            # gRPC timestamp supports date up to including year 9999
+            # If timestamp by any reason contains a larger number for seconds than supported
+            # you may get an overflow error
+            try:
+                timestamp = message.timestamp.ToDatetime(
+                            tzinfo=datetime.timezone.utc,
+                            )
+            except OverflowError:
+
+                logger.error("Timestamp %d out of accepted range, value ignored!",
+                             message.timestamp.seconds)
+                return None
+        else:
+            timestamp = None
+
         return cls(
             value=getattr(message, message.WhichOneof('value')),
-            timestamp=message.timestamp.ToDatetime(
-                tzinfo=datetime.timezone.utc,
-            ) if message.HasField('timestamp') else None,
+            timestamp=timestamp,
         )
 
     def cast_array_values(cast, array):
@@ -635,9 +664,21 @@ class BaseVSSClient:
                 err, preserving_proto_field_name=True) for err in response.errors]
         else:
             errors = []
-        if (error and error['code'] is not http.HTTPStatus.OK) or any(
-            sub_error['error']['code'] is not http.HTTPStatus.OK for sub_error in errors
-        ):
+
+        raise_error = False
+        if (error and error.get('code') != 200):
+            raise_error = True
+        else:
+            for sub_error in errors:
+                if 'error' in sub_error:
+                    if sub_error['error'].get('code') != 200:
+                        logger.debug("Sub-error %d but no top level error", sub_error['error'].get('code'))
+                        raise_error = True
+                else:
+                    logger.error("No error field for sub-error")
+                    raise_error = True
+
+        if raise_error:
             raise VSSClientError(error, errors)
 
     def get_authorization_header(self, token: str):

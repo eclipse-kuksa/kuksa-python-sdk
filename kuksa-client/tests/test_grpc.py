@@ -119,17 +119,29 @@ class TestMetadata:
         (None, None, [-42, 0, 42]),
         (-42, 42, [-42, 0, 42]),
     ])
-    def test_to_message_signed_value_restriction(self, value_type, min_value, max_value, allowed_values):
+    def test_to_from_message_signed_value_restriction(self, value_type, min_value, max_value, allowed_values):
+
+        input_metadata = Metadata(value_restriction=ValueRestriction(
+                            min=min_value, max=max_value, allowed_values=allowed_values,
+                            ))
+
+        if not allowed_values:
+            # Empty array treated as None by KUKSA Metadata class
+            allowed_values = None
+
         if (min_value, max_value, allowed_values) == (None, None, None):
             expected_message = types_pb2.Metadata()
+            output_metadata = Metadata()
         else:
             expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
                 signed=types_pb2.ValueRestrictionInt(
                     min=min_value, max=max_value, allowed_values=allowed_values),
             ))
-        assert Metadata(value_restriction=ValueRestriction(
-            min=min_value, max=max_value, allowed_values=allowed_values,
-        )).to_message(value_type) == expected_message
+            output_metadata = Metadata(value_restriction=ValueRestriction(
+                                min=min_value, max=max_value, allowed_values=allowed_values,
+                                ))
+        assert input_metadata.to_message(value_type) == expected_message
+        assert Metadata.from_message(expected_message) == output_metadata
 
     @pytest.mark.parametrize('value_type', (
         DataType.UINT8,
@@ -150,17 +162,30 @@ class TestMetadata:
         (None, None, [0, 12, 42]),
         (0, 42, [0, 12, 42]),
     ])
-    def test_to_message_unsigned_value_restriction(self, value_type, min_value, max_value, allowed_values):
+    def test_to_from_message_unsigned_value_restriction(self, value_type, min_value, max_value, allowed_values):
+
+        input_metadata = Metadata(value_restriction=ValueRestriction(
+                            min=min_value, max=max_value, allowed_values=allowed_values,
+                            ))
+
+        if not allowed_values:
+            # Empty array treated as None by KUKSA Metadata class
+            allowed_values = None
+
         if (min_value, max_value, allowed_values) == (None, None, None):
             expected_message = types_pb2.Metadata()
+            output_metadata = Metadata()
         else:
             expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
                 unsigned=types_pb2.ValueRestrictionUint(
                     min=min_value, max=max_value, allowed_values=allowed_values),
             ))
-        assert Metadata(value_restriction=ValueRestriction(
-            min=min_value, max=max_value, allowed_values=allowed_values,
-        )).to_message(value_type) == expected_message
+            output_metadata = Metadata(value_restriction=ValueRestriction(
+                                min=min_value, max=max_value, allowed_values=allowed_values,
+                                ))
+
+        assert input_metadata.to_message(value_type) == expected_message
+        assert Metadata.from_message(expected_message) == output_metadata
 
     @pytest.mark.parametrize('value_type', (
         DataType.FLOAT,
@@ -178,31 +203,66 @@ class TestMetadata:
         (None, None, [0.5, 12., 41.5]),
         (0.5, 41.5, [0.5, 12., 41.5]),
     ])
-    def test_to_message_float_value_restriction(self, value_type, min_value, max_value, allowed_values):
+    def test_to_from_message_float_value_restriction(self, value_type, min_value, max_value, allowed_values):
+
+        input_metadata = Metadata(value_restriction=ValueRestriction(
+                            min=min_value, max=max_value, allowed_values=allowed_values,
+                            ))
+
+        if not allowed_values:
+            # Empty array treated as None by KUKSA Metadata class
+            allowed_values = None
+
         if (min_value, max_value, allowed_values) == (None, None, None):
             expected_message = types_pb2.Metadata()
+            output_metadata = Metadata()
         else:
             expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
                 floating_point=types_pb2.ValueRestrictionFloat(
                     min=min_value, max=max_value, allowed_values=allowed_values),
             ))
-        assert Metadata(value_restriction=ValueRestriction(
-            min=min_value, max=max_value, allowed_values=allowed_values,
-        )).to_message(value_type) == expected_message
+            output_metadata = Metadata(value_restriction=ValueRestriction(
+                                min=min_value, max=max_value, allowed_values=allowed_values,
+                                ))
+
+        assert input_metadata.to_message(value_type) == expected_message
+        assert Metadata.from_message(expected_message) == output_metadata
 
     @pytest.mark.parametrize('value_type', (DataType.STRING, DataType.STRING_ARRAY))
     @pytest.mark.parametrize('allowed_values', [None, [], ['Hello', 'world']])
-    def test_to_message_string_value_restriction(self, value_type, allowed_values):
+    def test_to_from_message_string_value_restriction(self, value_type, allowed_values):
+
+        input_metadata = Metadata(value_restriction=ValueRestriction(
+                            allowed_values=allowed_values,
+                            ))
+
+        if not allowed_values:
+            # Empty array treated as None by KUKSA Metadata class
+            allowed_values = None
+
         if allowed_values is None:
             expected_message = types_pb2.Metadata()
+            output_metadata = Metadata()
         else:
             expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
                 string=types_pb2.ValueRestrictionString(
                     allowed_values=allowed_values),
             ))
-        assert Metadata(value_restriction=ValueRestriction(
-            allowed_values=allowed_values,
-        )).to_message(value_type) == expected_message
+            output_metadata = Metadata(value_restriction=ValueRestriction(
+                            allowed_values=allowed_values,
+                            ))
+
+        assert input_metadata.to_message(value_type) == expected_message
+        assert Metadata.from_message(expected_message) == output_metadata
+
+    def test_metadata_from_message_value_restriction_no_type(self):
+        """
+        This intends to cover the case when the proto message has a value restriction, but
+        no contents (type not specified)
+        """
+        input_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction())
+        expected_metadata = Metadata()
+        assert Metadata.from_message(input_message) == expected_metadata
 
     @pytest.mark.parametrize('metadata_dict, init_kwargs', [
         ({}, {}),
