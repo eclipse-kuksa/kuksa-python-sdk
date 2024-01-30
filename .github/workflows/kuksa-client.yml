@@ -39,14 +39,14 @@ jobs:
     needs: check_ghcr_push
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         # Fetch everything to get tags working as expected
         fetch-depth: 0
         submodules: 'true'
     - name: Docker meta
       id: meta
-      uses: docker/metadata-action@v4
+      uses: docker/metadata-action@v5
       with:
         # list of Docker images to use as base name for tags
         images: |
@@ -61,11 +61,11 @@ jobs:
 
     # only needed for runners without buildx setup, will be slow
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
+      uses: docker/setup-qemu-action@v3
 
     - name: Set up Docker Buildx
       id: buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
 
     - name: Log in to the Container registry
       if: needs.check_ghcr_push.outputs.push == 'true'
@@ -79,7 +79,7 @@ jobs:
 
     - name: Build kuksa command line client docker and push to ghcr.io
       if: needs.check_ghcr_push.outputs.push == 'true'
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         platforms: |
           linux/amd64
@@ -93,7 +93,7 @@ jobs:
 
     - name: Build ephemeral KUKSA command line client docker and push to ttl.sh
       if: needs.check_ghcr_push.outputs.push == 'false'
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         platforms: |
           linux/amd64
@@ -115,7 +115,7 @@ jobs:
 
     steps:
       - name: Checkout kuksa-python-sdk
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: 'true'
       - name: Install pip
