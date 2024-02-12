@@ -159,7 +159,8 @@ class TestClient(Cmd):
         return basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
 
     COMM_SETUP_COMMANDS = "Communication Set-up Commands"
-    VSS_COMMANDS = "Kuksa Interaction Commands"
+    VSS_COMMANDS = "Kuksa Interaction Commands (Supported by both KUKSA Databroker and KUKSA Server)"
+    VSS_COMMANDS_SERVER = "Kuksa Interaction Commands (Only supported by KUKSA Server)"
     INFO_COMMANDS = "Info Commands"
 
     ap_connect = argparse.ArgumentParser()
@@ -526,13 +527,14 @@ class TestClient(Cmd):
             return self.commThread.getMetaData(path)
         return "{}"
 
-    @with_category(VSS_COMMANDS)
+    @with_category(VSS_COMMANDS_SERVER)
     @with_argparser(ap_updateVSSTree)
     def do_updateVSSTree(self, args):
         """Update VSS Tree Entry"""
         if self.checkConnection():
             resp = self.commThread.updateVSSTree(args.Json)
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
+            if resp is not None:
+                print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
 
     @with_category(VSS_COMMANDS)
     @with_argparser(ap_updateMetaData)

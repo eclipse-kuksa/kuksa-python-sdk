@@ -259,6 +259,10 @@ class Backend(cli_backend.Backend):
 
         self.grpcConnected = False
 
+    # Update VSS Tree Entry
+    def updateVSSTree(self, jsonStr, timeout=5):
+        print("Command not supported by KUKSA Databroker or KUKSA gRPC!")
+
     # Main loop for handling gRPC communication
     async def mainLoop(self):
         if self.insecure:
