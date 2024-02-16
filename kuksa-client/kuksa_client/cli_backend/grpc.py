@@ -69,7 +69,7 @@ class Backend(cli_backend.Backend):
                 self.token = str(self.token_or_tokenfile)
         else:
             self.token = ""
-        self.grpcConnected = False
+        self.grpc_connection_established = False
 
         self.sendMsgQueue = queue.Queue()
         self.run = False
@@ -80,11 +80,11 @@ class Backend(cli_backend.Backend):
             "metadata": (kuksa_client.grpc.Field.METADATA, kuksa_client.grpc.View.METADATA),
         }
 
-    # Function to check connection status
-    def checkConnection(self):
-        if self.grpcConnected:
-            return True
-        return False
+    def connection_established(self) -> bool:
+        """
+        Function to check connection status
+        """
+        return self.grpc_connection_established
 
     # Function to stop the communication
     def stop(self):
@@ -215,10 +215,10 @@ class Backend(cli_backend.Backend):
 
     # Async function to handle the gRPC calls
     async def _grpcHandler(self, vss_client: kuksa_client.grpc.aio.VSSClient):
-        self.grpcConnected = True
         self.run = True
         subscriber_manager = kuksa_client.grpc.aio.SubscriberManager(
             vss_client)
+        self.grpc_connection_established = True
         while self.run:
             try:
                 (call, requestArgs, responseQueue) = self.sendMsgQueue.get_nowait()
@@ -257,7 +257,7 @@ class Backend(cli_backend.Backend):
                 responseQueue.put(
                     (None, {"error": "ValueError in casting the value."}))
 
-        self.grpcConnected = False
+        self.grpc_connection_established = False
 
     # Update VSS Tree Entry
     def updateVSSTree(self, jsonStr, timeout=5):

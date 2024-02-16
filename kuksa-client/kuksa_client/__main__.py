@@ -112,7 +112,7 @@ class TestClient(Cmd):
                 self.metadata = metadata_tree_to_dict(entries["metadata"])
 
     def path_completer(self, text, line, begidx, endidx):
-        if not self.checkConnection():
+        if not self.connection_established():
             return None
 
         if len(self.pathCompletionItems) == 0:
@@ -362,7 +362,7 @@ class TestClient(Cmd):
         """Authorize the client to interact with the server"""
         if args.token_or_tokenfile is not None:
             self.token_or_tokenfile = args.token_or_tokenfile
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.authorize(self.token_or_tokenfile)
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
 
@@ -370,7 +370,7 @@ class TestClient(Cmd):
     @with_argparser(ap_setValue)
     def do_setValue(self, args):
         """Set the value of a path"""
-        if self.checkConnection():
+        if self.connection_established():
             # If there is a blank before a single/double quote on the kuksa-client cli then
             # the argparser shell will remove it, there is nothing we can do to it
             # This gives off behavior for examples like:
@@ -394,7 +394,7 @@ class TestClient(Cmd):
     @with_argparser(ap_setValues)
     def do_setValues(self, args):
         """Set the value of given paths"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.setValues(
                 dict(getattr(args, "Path=Value")), args.attribute
             )
@@ -405,7 +405,7 @@ class TestClient(Cmd):
     @with_argparser(ap_setTargetValue)
     def do_setTargetValue(self, args):
         """Set the target value of a path"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.setValue(args.Path, args.Value, "targetValue")
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
         self.pathCompletionItems = []
@@ -414,7 +414,7 @@ class TestClient(Cmd):
     @with_argparser(ap_setTargetValues)
     def do_setTargetValues(self, args):
         """Set the target value of given paths"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.setValues(
                 dict(getattr(args, "Path=Value")), "targetValue"
             )
@@ -425,7 +425,7 @@ class TestClient(Cmd):
     @with_argparser(ap_getValue)
     def do_getValue(self, args):
         """Get the value of a path"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.getValue(args.Path, args.attribute)
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
         self.pathCompletionItems = []
@@ -434,7 +434,7 @@ class TestClient(Cmd):
     @with_argparser(ap_getValues)
     def do_getValues(self, args):
         """Get the value of given paths"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.getValues(args.Path, args.attribute)
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
         self.pathCompletionItems = []
@@ -443,7 +443,7 @@ class TestClient(Cmd):
     @with_argparser(ap_getTargetValue)
     def do_getTargetValue(self, args):
         """Get the value of a path"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.getValue(args.Path, "targetValue")
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
         self.pathCompletionItems = []
@@ -452,7 +452,7 @@ class TestClient(Cmd):
     @with_argparser(ap_getTargetValues)
     def do_getTargetValues(self, args):
         """Get the value of given paths"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.getValues(args.Path, "targetValue")
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
         self.pathCompletionItems = []
@@ -461,7 +461,7 @@ class TestClient(Cmd):
     @with_argparser(ap_subscribe)
     def do_subscribe(self, args):
         """Subscribe the value of a path"""
-        if self.checkConnection():
+        if self.connection_established():
             if args.output_to_file:
                 logPath = (
                     pathlib.Path.cwd()
@@ -485,7 +485,7 @@ class TestClient(Cmd):
     @with_argparser(ap_subscribeMultiple)
     def do_subscribeMultiple(self, args):
         """Subscribe to updates of given paths"""
-        if self.checkConnection():
+        if self.connection_established():
             if args.output_to_file:
                 logPath = (
                     pathlib.Path.cwd()
@@ -510,7 +510,7 @@ class TestClient(Cmd):
     @with_argparser(ap_unsubscribe)
     def do_unsubscribe(self, args):
         """Unsubscribe an existing subscription"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.unsubscribe(args.SubscribeId)
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
             self.subscribeIds.discard(args.SubscribeId)
@@ -523,7 +523,7 @@ class TestClient(Cmd):
 
     def getMetaData(self, path):
         """Get MetaData of the path"""
-        if self.checkConnection():
+        if self.connection_established():
             return self.commThread.getMetaData(path)
         return "{}"
 
@@ -531,7 +531,7 @@ class TestClient(Cmd):
     @with_argparser(ap_updateVSSTree)
     def do_updateVSSTree(self, args):
         """Update VSS Tree Entry"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.updateVSSTree(args.Json)
             if resp is not None:
                 print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
@@ -540,7 +540,7 @@ class TestClient(Cmd):
     @with_argparser(ap_updateMetaData)
     def do_updateMetaData(self, args):
         """Update MetaData of a given path"""
-        if self.checkConnection():
+        if self.connection_established():
             resp = self.commThread.updateMetaData(args.Path, args.Json)
             print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
 
@@ -561,10 +561,15 @@ class TestClient(Cmd):
                 self.commThread.stop()
                 self.commThread = None
 
-    def checkConnection(self):
-        if self.commThread is None or not self.commThread.checkConnection():
+    def connection_established(self) -> bool:
+        """
+        Check if thread has established a connection to the broker/server.
+        Note that this method does not indicate the current state of the connection,
+        This method may return True even if the broker/server currently is not reachable.
+        """
+        if self.commThread is None or not self.commThread.connection_established():
             self.connect()
-        return self.commThread.checkConnection()
+        return self.commThread.connection_established()
 
     def connect(self):
         """Connect to the VISS/gRPC Server"""
@@ -622,10 +627,10 @@ using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS' } protocol."
 
         waitForConnection = threading.Condition()
         waitForConnection.acquire()
-        waitForConnection.wait_for(self.commThread.checkConnection, timeout=1)
+        waitForConnection.wait_for(self.commThread.connection_established, timeout=1)
         waitForConnection.release()
 
-        if self.commThread.checkConnection():
+        if self.commThread.connection_established():
             pass
         else:
             print(
