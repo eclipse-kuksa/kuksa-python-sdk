@@ -37,8 +37,23 @@ class KuksaClientThread(threading.Thread):
         self.backend = cli_backend.Backend.from_config(config)
         self.loop = None
 
-    def checkConnection(self):
-        return self.backend.checkConnection()
+    # PEP 702 deprecated decorator available first in Python 3.13
+    def checkConnection(self) -> bool:
+        """
+        Check if thread has established a connection to the broker/server.
+        Note that this method does not indicate the current state of the connection,
+        This method may return True even if the broker/server currently is not reachable.
+        Deprecated - Use connection_established() instead"
+        """
+        return self.connection_established()
+
+    def connection_established(self) -> bool:
+        """
+        Check if thread has established a connection to the broker/server.
+        Note that this method does not indicate the current state of the connection,
+        This method may return True even if the broker/server currently is not reachable.
+        """
+        return self.backend.connection_established()
 
     def stop(self):
         self.backend.stop()

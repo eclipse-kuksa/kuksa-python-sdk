@@ -35,7 +35,7 @@ from kuksa_client import cli_backend
 class Backend(cli_backend.Backend):
     def __init__(self, config):
         super().__init__(config)
-        self.wsConnected = False
+        self.ws_connection_established = False
         self.subprotocol = None
         self.token = None
         self.subscriptionCallbacks = {}
@@ -72,7 +72,7 @@ class Backend(cli_backend.Backend):
                 return
 
     async def _msgHandler(self, webSocket):
-        self.wsConnected = True
+        self.ws_connection_established = True
         self.run = True
         recv = asyncio.Task(self._receiver_handler(webSocket))
         send = asyncio.Task(self._sender_handler(webSocket))
@@ -111,7 +111,7 @@ class Backend(cli_backend.Backend):
 
     # Function to stop the communication
     def stop(self):
-        self.wsConnected = False
+        self.ws_connection_established = False
         self.run = False
         print("Server disconnected.")
 
@@ -284,9 +284,11 @@ class Backend(cli_backend.Backend):
 
         return res
 
-    # Function to check connection
-    def checkConnection(self):
-        return self.wsConnected
+    def connection_established(self) -> bool:
+        """
+        Function to check connection
+        """
+        return self.ws_connection_established
 
     async def connect(self, _=None):
         subprotocols = ["VISSv2"]
