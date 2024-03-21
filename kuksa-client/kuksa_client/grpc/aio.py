@@ -333,6 +333,7 @@ class VSSClient(BaseVSSClient):
     @check_connected_async_iter
     async def subscribe(self,
                         entries: Iterable[SubscribeEntry],
+                        frequency: Optional[int],
                         **rpc_kwargs,
                         ) -> AsyncIterator[List[EntryUpdate]]:
         """
@@ -343,6 +344,8 @@ class VSSClient(BaseVSSClient):
         rpc_kwargs["metadata"] = self.generate_metadata_header(
             rpc_kwargs.get("metadata"))
         req = self._prepare_subscribe_request(entries)
+        if frequency is not None:
+            req.frequency_hertz = frequency
         resp_stream = self.client_stub.Subscribe(req, **rpc_kwargs)
         try:
             async for resp in resp_stream:
