@@ -39,7 +39,6 @@ from cmd2 import constants
 from cmd2.utils import basic_complete
 from urllib.parse import urlparse
 
-from kuksa_client import kuksa_server_certificates
 from kuksa_client import KuksaClientThread
 from kuksa_client import _metadata
 
@@ -351,7 +350,6 @@ class TestClient(Cmd):
         with (pathlib.Path(scriptDir) / "logo").open("r", encoding="utf-8") as f:
             logo = f.read()
             print(logo.replace("%ver%", str(_metadata.__version__)))
-        print("Default tokens directory: " + self.getDefaultTokenDir())
 
         print()
         self.connect()
@@ -595,7 +593,10 @@ class TestClient(Cmd):
             config["port"] = srv.port
 
         if srv.scheme in ["grpcs", "wss"]:
-            config["insecure"] = False
+            if self.cacertificate is None:
+                print("TLS cannot be used as no CA Certificate specifed!")
+            else:
+                config["insecure"] = False
 
         if srv.hostname is None:
             print("No hostname or IP given")
@@ -646,15 +647,6 @@ using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS' } protocol."
         self.server = args.server
         self.connect()
 
-    def getDefaultTokenDir(self):
-        try:
-            return os.path.join(kuksa_server_certificates.__certificate_dir__, "jwt")
-        except AttributeError:
-            guessTokenDir = os.path.join(scriptDir, "kuksa_server_certificates/jwt")
-            if os.path.isdir(guessTokenDir):
-                return guessTokenDir
-            return "Unknown"
-
     @with_category(INFO_COMMANDS)
     def do_info(self, _args):
         """Show summary info of the client"""
@@ -662,24 +654,17 @@ using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS' } protocol."
         print("Uri: " + _metadata.__uri__)
         print("Author: " + _metadata.__author__)
         print("Copyright: " + _metadata.__copyright__)
-        print("Default tokens directory: " + self.getDefaultTokenDir())
 
     @with_category(INFO_COMMANDS)
     def do_version(self, _args):
         """Show version of the client"""
         print(_metadata.__version__)
 
-    @with_category(INFO_COMMANDS)
-    def do_printTokenDir(self, _args):
-        """Show default token directory"""
-        print(self.getDefaultTokenDir())
-
 
 # pylint: enable=too-many-public-methods
 # pylint: enable=too-many-instance-attributes
 
 # Main Function
-
 
 def main():
     parser = argparse.ArgumentParser()

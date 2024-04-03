@@ -1,6 +1,3 @@
-[submodule "submodules/kuksa.val"]
-	path = submodules/kuksa.val
-	url = https://github.com/eclipse/kuksa.val
-[submodule "submodules/kuksa-common"]
-	path = submodules/kuksa-common
-	url = https://github.com/eclipse-kuksa/kuksa-common
+[submodule "submodules/kuksa-databroker"]
+	path = submodules/kuksa-databroker
+	url = https://github.com/eclipse-kuksa/kuksa-databroker
