@@ -50,26 +50,14 @@ kuksa-client ws://127.0.0.1:8090
 
 ## TLS with databroker
 
-KUKSA Client uses TLS to connect to databroker when the schema part of the server URI is `grpcs`, i.e. a valid command to connect to a TLS enabled local databroker is
+KUKSA Client uses TLS to connect to Databroker when the schema part of the server URI is `grpcs`.
+The KUKSA Python SDK does not include any default certificates or keys.
+The root certificate used to authenticate the Databroker must be specified with `--cacertificate <path>`.
+If you want to use KUKSA example Root CA you need to provide it from [kuksa-common](https://github.com/eclipse-kuksa/kuksa-common/tree/main/tls).
+
 
 ```
-kuksa-client grpcs://localhost:55555
-```
-
-By default the KUKSA example Root CA and Client keys are used, but client keys have no effect currently as mutual authentication is not supported by KUKSA Databroker or KUKSA Server.
-
-
-This call with all parameters specified give same effect:
-
-```
-kuksa-client --certificate ../kuksa_certificates/Client.pem --keyfile ../kuksa_certificates/Client.key --cacertificate ./kuksa_certificates/CA.pem grpcs://localhost:55555
-```
-
-There is actually no reason to specify client key and certificate, as mutual authentication is not supported in KUKSA Databroker,
-so the command can be simplified like this:
-
-```
-kuksa-client --cacertificate ./kuksa_certificates/CA.pem grpcs://localhost:55555
+kuksa-client --cacertificate ~/kuksa-common/tls/CA.pem grpcs://localhost:55555
 ```
 
 The example server protocol list 127.0.0.1 as an alternative name, but the TLS-client currently used does not accept it,
@@ -77,20 +65,15 @@ instead a valid server name must be given as argument.
 Currently `Server` and `localhost` are valid names from the example certificates.
 
 ```
-kuksa-client --cacertificate ../kuksa_certificates/CA.pem --tls-server-name Server grpcs://127.0.0.1:55555
+kuksa-client --cacertificate ~/kuksa-common/tls/CA.pem --tls-server-name Server grpcs://127.0.0.1:55555
 ```
 
-## TLS with val-server
-Val-server also supports TLS. KUKSA Client uses TLS to connect to val-server when the schema part of the server URI is `wss`.  A valid command to connect to a local TLS enabled val-server is
+## TLS with Websocket
+Websocket access also supports TLS. KUKSA Client uses TLS to connect to Weboscket when the schema part of the server URI is `wss`.  A valid command to connect to a local TLS enabled VSS Server (KUKSA Databroker, VISSR, ...) supporting Websocket is
+
 
 ```
-kuksa-client wss://localhost:8090
-```
-
-This corresponds to this call:
-
-```
-kuksa-client --cacertificate ../kuksa_certificates/CA.pem wss://localhost:8090
+kuksa-client --cacertificate ~/kuksa-common/tls/CA.pem wss://localhost:8090
 ```
 
 In some environments the `--tls-server-name` argument must be used to specify alternative server name
@@ -100,12 +83,8 @@ if connecting to the server by numerical IP address like `wss://127.0.0.1:8090`.
 
 If the connected KUKSA Server or KUKSA Databroker require authorization the first step after a connection is made is to authorize. KUKSA Server and KUKSA Databroker use different token formats.
 
-The jwt tokens for testing can either be found in the [kuksa.val repository](https://github.com/eclipse/kuksa.val/tree/master/kuksa_certificates/jwt)
-or you can also use following command inside `kuksa-client` to find the via `pip` installed certificate directory.
+The KUKSA jwt tokens for testing can be found in the [kuksa-common repository](https://github.com/eclipse/kuksa.val/tree/master/kuksa_certificates/jwt).
 
-```console
-Test Client> printTokenDir
-```
 Select one of the tokens and use the `authorize` command like below:
 
 ```console
@@ -114,8 +93,7 @@ Test Client> authorize /some/path/kuksa_certificates/jwt/super-admin.json.token
 
 ## Authorizing against KUKSA Databroker
 
-If connecting to Databroker the command `printTokenDir` is not much help as it shows the default token directories
-for KUKSA Server example tokens. If the KUKSA Databroker use default example tokens then one of the
+If the KUKSA Databroker use default example tokens then one of the
 tokens in [kuksa-common](https://github.com/eclipse-kuksa/kuksa-common/tree/main/jwt) can be used, like in the example below:
 
 ```console
@@ -141,7 +119,6 @@ getServerAddress    Gets the IP Address for the VISS/gRPC Server
 Info Commands
 ================================================================================
 info                Show summary info of the client
-printTokenDir       Show default token directory
 version             Show version of the client
 
 Kuksa Interaction Commands

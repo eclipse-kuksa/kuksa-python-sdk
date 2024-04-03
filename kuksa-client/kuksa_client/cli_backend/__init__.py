@@ -16,9 +16,6 @@
 # SPDX-License-Identifier: Apache-2.0
 ########################################################################
 
-import pathlib
-from kuksa_client import kuksa_server_certificates
-
 
 class Backend:
     def __init__(self, config):
@@ -28,16 +25,14 @@ class Backend:
             self.insecure = config.getboolean('insecure', False)
         except AttributeError:
             self.insecure = config.get('insecure', False)
-        self.default_cert_path = pathlib.Path(kuksa_server_certificates.__path__[0])
-        self.cacertificate = config.get(
-            'cacertificate', str(self.default_cert_path / 'CA.pem'))
-        self.certificate = config.get('certificate', str(
-            self.default_cert_path / 'Client.pem'))
-        self.keyfile = config.get('keyfile', str(
-            self.default_cert_path / 'Client.key'))
+        self.cacertificate = config.get('cacertificate', None)
+        # If no CA Certificate is given we will use an insecure connection, requested or not
+        if self.cacertificate is None:
+            self.insecure = True
+        self.certificate = config.get('certificate', None)
+        self.keyfile = config.get('keyfile', None)
         self.tls_server_name = config.get('tls_server_name', "")
-        self.token_or_tokenfile = config.get('token_or_tokenfile', str(
-            self.default_cert_path / 'jwt/all-read-write.json.token'))
+        self.token_or_tokenfile = config.get('token_or_tokenfile', None)
 
     @staticmethod
     def from_config(config):

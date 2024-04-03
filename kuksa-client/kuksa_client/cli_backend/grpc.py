@@ -57,9 +57,12 @@ class DatabrokerEncoder(json.JSONEncoder):
 class Backend(cli_backend.Backend):
     def __init__(self, config):
         super().__init__(config)
-        self.cacertificate = pathlib.Path(self.cacertificate)
-        self.keyfile = pathlib.Path(self.keyfile)
-        self.certificate = pathlib.Path(self.certificate)
+        if self.cacertificate is not None:
+            self.cacertificate = pathlib.Path(self.cacertificate)
+        if self.keyfile is not None:
+            self.keyfile = pathlib.Path(self.keyfile)
+        if self.certificate is not None:
+            self.certificate = pathlib.Path(self.certificate)
         if self.token_or_tokenfile is not None:
             if os.path.isfile(self.token_or_tokenfile):
                 self.token_or_tokenfile = pathlib.Path(self.token_or_tokenfile)
