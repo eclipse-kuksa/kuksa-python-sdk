@@ -331,7 +331,7 @@ class Datapoint:
                 timestamp = message.timestamp.ToDatetime(
                             tzinfo=datetime.timezone.utc,
                             )
-            except OverflowError:
+            except ValueError:
 
                 logger.error("Timestamp %d out of accepted range, value ignored!",
                              message.timestamp.seconds)
