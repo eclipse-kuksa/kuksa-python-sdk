@@ -26,10 +26,13 @@ import queue
 import ssl
 import time
 import uuid
+import logging
 
 import websockets
 
 from kuksa_client import cli_backend
+
+logger = logging.getLogger(__name__)
 
 
 class Backend(cli_backend.Backend):
@@ -58,7 +61,7 @@ class Backend(cli_backend.Backend):
                         self.subscriptionCallbacks[resJson["subscriptionId"]](
                             message)
                     except Exception as e:  # pylint: disable=broad-except
-                        print(e)
+                        logger.warning("Receiver Handler exception", e)
 
     async def _sender_handler(self, webSocket):
         while self.run:
@@ -68,7 +71,7 @@ class Backend(cli_backend.Backend):
             except queue.Empty:
                 await asyncio.sleep(0.01)
             except Exception as e:  # pylint: disable=broad-except
-                print(e)
+                logger.warning("Sender Handler exception", e)
                 return
 
     async def _msgHandler(self, webSocket):
@@ -113,7 +116,7 @@ class Backend(cli_backend.Backend):
     def stop(self):
         self.ws_connection_established = False
         self.run = False
-        print("Server disconnected.")
+        logger.info("Server disconnected.")
 
     def disconnect(self, _):
         self.stop()
@@ -302,7 +305,7 @@ class Backend(cli_backend.Backend):
             # If using your own certificates make sure that name is included or use tls_server_name work-around
             context.check_hostname = True
             try:
-                print("connect to wss://"+self.serverIP+":"+str(self.serverPort))
+                logger.info("connect to wss://"+self.serverIP+":"+str(self.serverPort))
                 args = {
                     "uri": "wss://"+self.serverIP+":"+str(self.serverPort),
                     "ssl": context,
@@ -316,22 +319,22 @@ class Backend(cli_backend.Backend):
 
                 async with websockets.connect(**args) as ws:
                     self.subprotocol = ws.subprotocol
-                    print(f"Websocket connected. Negotiated subprotocol {self.subprotocol}")
+                    logger.info(f"Websocket connected. Negotiated subprotocol {self.subprotocol}")
                     await self._msgHandler(ws)
             except OSError as e:
-                print("Disconnected!! " + str(e))
+                logger.warning("Disconnected!!", e)
         else:
             try:
                 uri = "ws://"+self.serverIP+":"+str(self.serverPort)
-                print(f"connect to {uri}")
+                logger.info("connect to %s", uri)
                 async with websockets.connect(uri, subprotocols=subprotocols) as ws:
                     self.subprotocol = ws.subprotocol
                     if self.subprotocol == "VISSv2":
-                        print("subprotocol matches condition")
-                    print(f"Websocket connected. Negotiated subprotocol {self.subprotocol}")
+                        logger.info("subprotocol matches condition")
+                    logger.info("Websocket connected. Negotiated subprotocol %s", self.subprotocol)
                     await self._msgHandler(ws)
             except OSError as e:
-                print("Disconnected!! " + str(e))
+                logger.warning("Disconnected!!", e)
 
     # Main loop for handling websocket communication
     async def mainLoop(self):

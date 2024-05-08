@@ -48,6 +48,29 @@ If you wish to connect to a VISS server e.g. `kuksa-val-server` (not using TLS),
 kuksa-client ws://127.0.0.1:8090
 ```
 
+## Logging
+
+The log level of `kuksa-client` can be set using the LOG_LEVEL environment variable. The following levels are supported
+
+* `error`
+* `warning`
+* `info` (default)
+* `debug`
+
+
+To set the log level to DEBUG
+
+```console
+$ LOG_LEVEL=debug kuksa-client
+```
+
+It is possible to control log level in detail.
+The example below sets log level to DEBUG, but for asyncio INFO.
+
+```console
+$ LOG_LEVEL=debug,asyncio=info kuksa-client
+```
+
 ## TLS with databroker
 
 KUKSA Client uses TLS to connect to Databroker when the schema part of the server URI is `grpcs`.
