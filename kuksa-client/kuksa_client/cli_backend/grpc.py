@@ -38,7 +38,7 @@ from kuksa.val.v1 import types_pb2
 
 def callback_wrapper(callback: Callable[[str], None]) -> Callable[[Iterable[EntryUpdate]], None]:
     def wrapper(updates: Iterable[EntryUpdate]) -> None:
-        callback(json.dumps([update.to_dict() for update in updates]))
+        callback(json.dumps([update.to_dict() for update in updates], cls=DatabrokerEncoder))
     return wrapper
 
 
