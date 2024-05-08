@@ -20,9 +20,9 @@ dill==0.3.6
     # via pylint
 exceptiongroup==1.1.2
     # via pytest
-grpcio==1.56.2
+grpcio==1.63.0
     # via grpcio-tools
-grpcio-tools==1.56.2
+grpcio-tools==1.63.0
     # via kuksa-client (setup.cfg)
 iniconfig==2.0.0
     # via pytest
@@ -42,7 +42,7 @@ pluggy==1.2.0
     # via pytest
 ply==3.11
     # via jsonpath-ng
-protobuf==4.23.4
+protobuf==5.26.1
     # via grpcio-tools
 pygments==2.15.1
     # via kuksa-client (setup.cfg)
