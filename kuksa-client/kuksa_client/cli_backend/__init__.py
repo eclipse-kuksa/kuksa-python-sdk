@@ -29,8 +29,6 @@ class Backend:
         # If no CA Certificate is given we will use an insecure connection, requested or not
         if self.cacertificate is None:
             self.insecure = True
-        self.certificate = config.get('certificate', None)
-        self.keyfile = config.get('keyfile', None)
         self.tls_server_name = config.get('tls_server_name', "")
         self.token_or_tokenfile = config.get('token_or_tokenfile', None)
 

@@ -47,8 +47,6 @@ scriptDir = os.path.dirname(os.path.realpath(__file__))
 
 DEFAULT_KUKSA_ADDRESS = os.environ.get("KUKSA_ADDRESS", "grpc://127.0.0.1:55555")
 DEFAULT_TOKEN_OR_TOKENFILE = os.environ.get("TOKEN_OR_TOKENFILE", None)
-DEFAULT_CERTIFICATE = os.environ.get("CERTIFICATE", None)
-DEFAULT_KEYFILE = os.environ.get("KEYFILE", None)
 DEFAULT_CACERTIFICATE = os.environ.get("CACERTIFICATE", None)
 DEFAULT_TLS_SERVER_NAME = os.environ.get("TLS_SERVER_NAME", None)
 
@@ -317,8 +315,6 @@ class TestClient(Cmd):
         self,
         server=None,
         token_or_tokenfile=None,
-        certificate=None,
-        keyfile=None,
         cacertificate=None,
         tls_server_name=None,
     ):
@@ -340,8 +336,6 @@ class TestClient(Cmd):
         self.subscribeIds = set()
         self.commThread = None
         self.token_or_tokenfile = token_or_tokenfile
-        self.certificate = certificate
-        self.keyfile = keyfile
         self.cacertificate = cacertificate
         self.tls_server_name = tls_server_name
 
@@ -612,10 +606,6 @@ using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS' } protocol."
         # Configs should only be added if they actually have a value
         if self.token_or_tokenfile is not None:
             config["token_or_tokenfile"] = self.token_or_tokenfile
-        if self.certificate is not None:
-            config["certificate"] = self.certificate
-        if self.keyfile is not None:
-            config["keyfile"] = self.keyfile
         if self.cacertificate is not None:
             config["cacertificate"] = self.cacertificate
         if self.tls_server_name is not None:
@@ -684,17 +674,6 @@ def main():
     )
 
     # Add TLS arguments
-    # Note: Databroker does not yet support mutual authentication, so no need to use two first arguments
-    parser.add_argument(
-        "--certificate",
-        default=DEFAULT_CERTIFICATE,
-        help="Client cert file(.pem), only needed for mutual authentication",
-    )
-    parser.add_argument(
-        "--keyfile",
-        default=DEFAULT_KEYFILE,
-        help="Client private key file (.key), only needed for mutual authentication",
-    )
     parser.add_argument(
         "--cacertificate",
         default=DEFAULT_CACERTIFICATE,
@@ -716,8 +695,6 @@ def main():
     clientApp = TestClient(
         args.server,
         token_or_tokenfile=args.token_or_tokenfile,
-        certificate=args.certificate,
-        keyfile=args.keyfile,
         cacertificate=args.cacertificate,
         tls_server_name=args.tls_server_name,
     )

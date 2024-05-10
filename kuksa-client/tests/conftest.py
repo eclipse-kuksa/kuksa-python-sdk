@@ -65,7 +65,7 @@ async def secure_val_server_fixture(unused_tcp_port, resources_path, val_service
             (resources_path / 'test-server.pem').read_bytes(),
         )],
         root_certificates=(resources_path / 'test-ca.pem').read_bytes(),
-        require_client_auth=True,
+        require_client_auth=False,
     ))
     await server.start()
     try:

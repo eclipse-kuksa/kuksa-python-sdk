@@ -406,8 +406,6 @@ class TestVSSClient:
             name='test_server', version='1.2.3')
         async with VSSClient('localhost', unused_tcp_port,
                              root_certificates=resources_path / 'test-ca.pem',
-                             private_key=resources_path / 'test-client.key',
-                             certificate_chain=resources_path / 'test-client.pem',
                              ensure_startup_connection=True
                              ):
             assert val_servicer.GetServerInfo.call_count == 1
