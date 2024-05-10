@@ -559,8 +559,6 @@ class BaseVSSClient:
         port: int,
         token: Optional[str] = None,
         root_certificates: Optional[Path] = None,
-        private_key: Optional[Path] = None,
-        certificate_chain: Optional[Path] = None,
         ensure_startup_connection: bool = True,
         connected: bool = False,
         tls_server_name: Optional[str] = None
@@ -569,8 +567,6 @@ class BaseVSSClient:
         self.authorization_header = self.get_authorization_header(token)
         self.target_host = f'{host}:{port}'
         self.root_certificates = root_certificates
-        self.private_key = private_key
-        self.certificate_chain = certificate_chain
         self.tls_server_name = tls_server_name
         self.ensure_startup_connection = ensure_startup_connection
         self.connected = connected
@@ -580,15 +576,7 @@ class BaseVSSClient:
         if self.root_certificates:
             logger.info(f"Using TLS with Root CA from {self.root_certificates}")
             root_certificates = self.root_certificates.read_bytes()
-            if self.private_key and self.certificate_chain:
-                private_key = self.private_key.read_bytes()
-                certificate_chain = self.certificate_chain.read_bytes()
-                # As of today there is no option in KUKSA.val Databroker to require client authentication
-                logger.info("Using client private key and certificates, mutual TLS supported if supported by server")
-                return grpc.ssl_channel_credentials(root_certificates, private_key, certificate_chain)
-            else:
-                logger.info("No client certificates provided, mutual TLS not supported!")
-                return grpc.ssl_channel_credentials(root_certificates)
+            return grpc.ssl_channel_credentials(root_certificates)
         logger.info("No Root CA present, it will not be possible to use a secure connection!")
         return None
 

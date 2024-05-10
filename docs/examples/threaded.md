@@ -12,9 +12,7 @@ Be also aware that this API returns JSON responses whose schema may vary from on
 - `port` server/databroker port, default: 8090
 - `protocol` protocol used to interact with server/databroker ("ws" or "grpc"), default: "ws"
 - `insecure` whether the communication should be unencrypted or not, default: `False`
-- `cacertificate` root certificate path, default: "../kuksa_certificates/CA.pem"
-- `certificate` client certificate path, default: "../kuksa_certificates/Client.pem"
-- `key` client private key path, default: "../kuksa_certificates/Client.key"
+- `cacertificate` root certificate path, default: ""
 
 ```python
 # An empty configuration dictionary will use the aforementioned default values:
@@ -176,5 +174,5 @@ Test Client> getValue Vehicle.Speed
   "error": "timeout"
 }
 
-Test Client> 
+Test Client>
 ```

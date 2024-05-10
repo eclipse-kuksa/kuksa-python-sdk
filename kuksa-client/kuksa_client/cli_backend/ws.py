@@ -297,8 +297,6 @@ class Backend(cli_backend.Backend):
         subprotocols = ["VISSv2"]
         if not self.insecure:
             context = ssl.create_default_context()
-            context.load_cert_chain(
-                certfile=self.certificate, keyfile=self.keyfile)
             context.load_verify_locations(cafile=self.cacertificate)
             # We want host name to match
             # For example certificates we use subjectAltName to make it match for Server, localahost and 127.0.0.1

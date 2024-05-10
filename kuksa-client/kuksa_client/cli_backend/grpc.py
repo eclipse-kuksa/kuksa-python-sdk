@@ -66,10 +66,6 @@ class Backend(cli_backend.Backend):
         super().__init__(config)
         if self.cacertificate is not None:
             self.cacertificate = pathlib.Path(self.cacertificate)
-        if self.keyfile is not None:
-            self.keyfile = pathlib.Path(self.keyfile)
-        if self.certificate is not None:
-            self.certificate = pathlib.Path(self.certificate)
         if self.token_or_tokenfile is not None:
             if os.path.isfile(self.token_or_tokenfile):
                 self.token_or_tokenfile = pathlib.Path(self.token_or_tokenfile)
@@ -285,8 +281,6 @@ class Backend(cli_backend.Backend):
                 self.serverIP,
                 self.serverPort,
                 root_certificates=self.cacertificate,
-                private_key=self.keyfile,
-                certificate_chain=self.certificate,
                 tls_server_name=self.tls_server_name,
                 token=self.token
             ) as vss_client:
