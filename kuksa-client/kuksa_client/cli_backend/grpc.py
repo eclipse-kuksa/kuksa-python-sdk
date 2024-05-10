@@ -28,6 +28,7 @@ from typing import Iterable
 from typing import Optional
 import uuid
 import os
+import logging
 
 from kuksa_client import cli_backend
 import kuksa_client.grpc
@@ -36,9 +37,15 @@ from kuksa_client.grpc import EntryUpdate
 from kuksa.val.v1 import types_pb2
 
 
+logger = logging.getLogger(__name__)
+
+
 def callback_wrapper(callback: Callable[[str], None]) -> Callable[[Iterable[EntryUpdate]], None]:
     def wrapper(updates: Iterable[EntryUpdate]) -> None:
-        callback(json.dumps([update.to_dict() for update in updates], cls=DatabrokerEncoder))
+        try:
+            callback(json.dumps([update.to_dict() for update in updates], cls=DatabrokerEncoder))
+        except Exception as e:
+            logger.error("Callback could not be executed", e)
     return wrapper
 
 
@@ -93,7 +100,7 @@ class Backend(cli_backend.Backend):
     def stop(self):
         self.disconnect()
         self.run = False
-        print("gRPC channel disconnected.")
+        logger.info("gRPC channel disconnected.")
 
     # Function to implement fetching of metadata
     def getMetaData(self, path: str, timeout=5):
@@ -264,14 +271,14 @@ class Backend(cli_backend.Backend):
 
     # Update VSS Tree Entry
     def updateVSSTree(self, jsonStr, timeout=5):
-        print("Command not supported by KUKSA Databroker or KUKSA gRPC!")
+        logger.warning("Command not supported by KUKSA Databroker or KUKSA gRPC!")
 
     # Main loop for handling gRPC communication
     async def mainLoop(self):
         if self.insecure:
 
             async with kuksa_client.grpc.aio.VSSClient(self.serverIP, self.serverPort, token=self.token) as vss_client:
-                print("gRPC channel connected.")
+                logger.info("gRPC channel connected.")
                 await self._grpcHandler(vss_client)
         else:
             async with kuksa_client.grpc.aio.VSSClient(
@@ -283,5 +290,5 @@ class Backend(cli_backend.Backend):
                 tls_server_name=self.tls_server_name,
                 token=self.token
             ) as vss_client:
-                print("Secure gRPC channel connected.")
+                logger.info("Secure gRPC channel connected.")
                 await self._grpcHandler(vss_client)

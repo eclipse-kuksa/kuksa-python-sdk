@@ -18,6 +18,9 @@
 # SPDX-License-Identifier: Apache-2.0
 ########################################################################
 
+
+import logging
+
 __all__ = (
     "__title__",
     "__summary__",
@@ -56,5 +59,5 @@ try:
     __license__ = metadata["license"]
 
 except importlib_metadata.PackageNotFoundError as e:
-    print(e)
-    print("skip configuring metadata")
+    logger = logging.getLogger(__name__)
+    logger.info("skip configuring metadata", e)

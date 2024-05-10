@@ -41,13 +41,11 @@ from urllib.parse import urlparse
 
 from kuksa_client import KuksaClientThread
 from kuksa_client import _metadata
+from kuksa_client.kuksa_logger import KuksaLogger
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 
 DEFAULT_KUKSA_ADDRESS = os.environ.get("KUKSA_ADDRESS", "grpc://127.0.0.1:55555")
-DEFAULT_LOGGING_CONFIG = os.environ.get(
-    "LOGGING_CONFIG", os.path.join(scriptDir, "logging.ini")
-)
 DEFAULT_TOKEN_OR_TOKENFILE = os.environ.get("TOKEN_OR_TOKENFILE", None)
 DEFAULT_CERTIFICATE = os.environ.get("CERTIFICATE", None)
 DEFAULT_KEYFILE = os.environ.get("KEYFILE", None)
@@ -667,6 +665,10 @@ using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS' } protocol."
 # Main Function
 
 def main():
+
+    kuksa_logger = KuksaLogger()
+    kuksa_logger.init_logging()
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "server",
@@ -674,11 +676,6 @@ def main():
         help=f"VSS server to connect to. Format: protocol://host[:port]. \
         Supported protocols: [grpc, grpcs, ws, wss]. Example: {DEFAULT_KUKSA_ADDRESS}",
         default=DEFAULT_KUKSA_ADDRESS,
-    )
-    parser.add_argument(
-        "--logging-config",
-        default=DEFAULT_LOGGING_CONFIG,
-        help="Path to logging configuration file",
     )
     parser.add_argument(
         "--token_or_tokenfile",
@@ -715,8 +712,6 @@ def main():
     )
 
     args = parser.parse_args()
-
-    logging.config.fileConfig(args.logging_config)
 
     clientApp = TestClient(
         args.server,
