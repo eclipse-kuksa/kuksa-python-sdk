@@ -1,4 +1,5 @@
 # KUKSA Python SDK
+
 ![kuksa.val Logo](https://raw.githubusercontent.com/eclipse-kuksa/kuksa-python-sdk/main/docs/pictures/logo.png)
 
 KUKSA Python Client and SDK is a part of the open source project [Eclipse KUKSA](https://www.eclipse.org/kuksa/).
@@ -9,7 +10,6 @@ More about Eclipse KUKSA can be found in the [repository](https://github.com/ecl
 KUKSA Python SDK provides both a command-line interface (CLI) and a standalone library to interact with either
 [KUKSA Server](https://github.com/eclipse/kuksa.val/tree/master/kuksa-val-server) or
 [KUKSA Databroker](https://github.com/eclipse/kuksa.val/tree/master/kuksa_databroker).
-
 
 ## Building and Installing the KUKSA Python SDK
 
@@ -39,8 +39,7 @@ More details on how to use the CLI is available in the KUKSA Python SDK [CLI doc
 
 ## Using Docker for the CLI
 
-The KUKSA Python SDK CLI is available as a [prebuilt docker container](https://github.com/eclipse-kuksa/kuksa-python-sdk/pkgs/container/kuksa-python-sdk%2Fkuksa-client).
-For more details see the KUKSA Python SDK [Docker documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/docker.md).
+The KUKSA Python SDK CLI is available as a [prebuilt docker container](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/docker.md).
 
 ## Using KUKSA Python SDK as library
 
