@@ -25,7 +25,7 @@ This package holds 3 different APIs depending on your application's requirements
 
 ## TLS configuration
 
-Clients like [KUKSA CAN Feeder](https://github.com/eclipse/kuksa.val.feeders/tree/main/dbc2val)
+Clients like [KUKSA CAN Provider](https://github.com/eclipse-kuksa/kuksa-can-provider)
 that use KUKSA Client library must typically set the path to the root CA certificate.
 If the path is set the VSSClient will try to establish a secure connection.
 
