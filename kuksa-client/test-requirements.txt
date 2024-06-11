@@ -4,7 +4,7 @@
 #
 #    pip-compile --extra=test --output-file=test-requirements.txt setup.cfg
 #
-astroid==3.1.0
+astroid==3.2.2
     # via pylint
 attrs==23.2.0
     # via cmd2
@@ -12,15 +12,15 @@ cmd2==1.5.0
     # via kuksa_client (setup.cfg)
 colorama==0.4.6
     # via cmd2
-coverage[toml]==7.5.1
+coverage[toml]==7.5.3
     # via pytest-cov
 dill==0.3.8
     # via pylint
 exceptiongroup==1.2.1
     # via pytest
-grpcio==1.63.0
+grpcio==1.64.1
     # via grpcio-tools
-grpcio-tools==1.63.0
+grpcio-tools==1.64.1
     # via kuksa_client (setup.cfg)
 iniconfig==2.0.0
     # via pytest
@@ -30,30 +30,30 @@ jsonpath-ng==1.6.1
     # via kuksa_client (setup.cfg)
 mccabe==0.7.0
     # via pylint
-packaging==24.0
+packaging==24.1
     # via pytest
-platformdirs==4.2.1
+platformdirs==4.2.2
     # via pylint
 pluggy==1.5.0
     # via pytest
 ply==3.11
     # via jsonpath-ng
-protobuf==5.26.1
+protobuf==5.27.1
     # via grpcio-tools
 pygments==2.18.0
     # via kuksa_client (setup.cfg)
-pylint==3.1.0
+pylint==3.2.3
     # via kuksa_client (setup.cfg)
 pyperclip==1.8.2
     # via cmd2
-pytest==8.2.0
+pytest==8.2.2
     # via
     #   kuksa_client (setup.cfg)
     #   pytest-asyncio
     #   pytest-cov
     #   pytest-mock
     #   pytest-timeout
-pytest-asyncio==0.23.6
+pytest-asyncio==0.23.7
     # via kuksa_client (setup.cfg)
 pytest-cov==5.0.0
     # via kuksa_client (setup.cfg)
@@ -66,9 +66,9 @@ tomli==2.0.1
     #   coverage
     #   pylint
     #   pytest
-tomlkit==0.12.4
+tomlkit==0.12.5
     # via pylint
-typing-extensions==4.11.0
+typing-extensions==4.12.2
     # via astroid
 wcwidth==0.2.13
     # via cmd2
