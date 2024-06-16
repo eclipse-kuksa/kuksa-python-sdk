@@ -948,7 +948,11 @@ class VSSClient(BaseVSSClient):
         self._process_set_response(resp)
 
     @check_connected
-    def subscribe(self, entries: Iterable[SubscribeEntry], **rpc_kwargs) -> Iterator[List[EntryUpdate]]:
+    def subscribe(self,
+                  entries: Iterable[SubscribeEntry],
+                  frequency: Optional[int],
+                  **rpc_kwargs,
+                  ) -> Iterator[List[EntryUpdate]]:
         """
         Parameters:
             rpc_kwargs
@@ -958,6 +962,8 @@ class VSSClient(BaseVSSClient):
         rpc_kwargs["metadata"] = self.generate_metadata_header(
             rpc_kwargs.get("metadata"))
         req = self._prepare_subscribe_request(entries)
+        if frequency is not None:
+            req.frequency_hertz = frequency
         resp_stream = self.client_stub.Subscribe(req, **rpc_kwargs)
         try:
             for resp in resp_stream:
