@@ -10,15 +10,15 @@ cmd2==1.5.0
     # via kuksa_client (setup.cfg)
 colorama==0.4.6
     # via cmd2
-grpcio==1.64.1
+grpcio==1.66.1
     # via grpcio-tools
-grpcio-tools==1.64.1
+grpcio-tools==1.66.1
     # via kuksa_client (setup.cfg)
 jsonpath-ng==1.6.1
     # via kuksa_client (setup.cfg)
 ply==3.11
     # via jsonpath-ng
-protobuf==5.27.1
+protobuf==5.27.2
     # via grpcio-tools
 pygments==2.18.0
     # via kuksa_client (setup.cfg)

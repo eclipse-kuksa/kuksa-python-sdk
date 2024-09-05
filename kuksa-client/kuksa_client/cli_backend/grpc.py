@@ -81,9 +81,18 @@ class Backend(cli_backend.Backend):
         self.run = False
 
         self.AttrDict = {
-            "value": (kuksa_client.grpc.Field.VALUE, kuksa_client.grpc.View.CURRENT_VALUE),
-            "targetValue": (kuksa_client.grpc.Field.ACTUATOR_TARGET, kuksa_client.grpc.View.TARGET_VALUE),
-            "metadata": (kuksa_client.grpc.Field.METADATA, kuksa_client.grpc.View.METADATA),
+            "value": (
+                kuksa_client.grpc.Field.VALUE,
+                kuksa_client.grpc.View.CURRENT_VALUE,
+            ),
+            "targetValue": (
+                kuksa_client.grpc.Field.ACTUATOR_TARGET,
+                kuksa_client.grpc.View.TARGET_VALUE,
+            ),
+            "metadata": (
+                kuksa_client.grpc.Field.METADATA,
+                kuksa_client.grpc.View.METADATA,
+            ),
         }
 
     def connection_established(self) -> bool:
@@ -112,8 +121,10 @@ class Backend(cli_backend.Backend):
     def getValues(self, paths: Iterable[str], attribute="value", timeout=5):
         if attribute in self.AttrDict:
             field, view = self.AttrDict[attribute]
-            entries = [kuksa_client.grpc.EntryRequest(
-                path=path, view=view, fields=(field,)) for path in paths]
+            entries = [
+                kuksa_client.grpc.EntryRequest(path=path, view=view, fields=(field,))
+                for path in paths
+            ]
             requestArgs = {'entries': entries}
             return self._sendReceiveMsg(("get", requestArgs), timeout)
 
@@ -127,15 +138,19 @@ class Backend(cli_backend.Backend):
         if attribute in self.AttrDict:
             field, _ = self.AttrDict[attribute]
             entry_updates = []
+            v1 = True
             for path, value in updates.items():
 
                 if field is kuksa_client.grpc.Field.VALUE:
                     entry = kuksa_client.grpc.DataEntry(
-                        path=path, value=kuksa_client.grpc.Datapoint(value=value))
+                        path=path,
+                        value=kuksa_client.grpc.Datapoint(value=value),
+                    )
+                    v1 = False
                 elif field is kuksa_client.grpc.Field.ACTUATOR_TARGET:
                     entry = kuksa_client.grpc.DataEntry(
-                        path=path, actuator_target=kuksa_client.grpc.Datapoint(
-                            value=value),
+                        path=path,
+                        actuator_target=kuksa_client.grpc.Datapoint(value=value),
                     )
                 elif field is kuksa_client.grpc.Field.METADATA:
                     try:
@@ -143,12 +158,13 @@ class Backend(cli_backend.Backend):
                     except json.JSONDecodeError:
                         return json.dumps({"error": "Metadata value needs to be a valid JSON object"})
                     entry = kuksa_client.grpc.DataEntry(
-                        path=path, metadata=kuksa_client.grpc.Metadata.from_dict(
-                            metadata_dict),
+                        path=path,
+                        metadata=kuksa_client.grpc.Metadata.from_dict(metadata_dict),
                     )
-                entry_updates.append(kuksa_client.grpc.EntryUpdate(
-                    entry=entry, fields=(field,)))
-            requestArgs = {'updates': entry_updates}
+                entry_updates.append(
+                    kuksa_client.grpc.EntryUpdate(entry=entry, fields=(field,))
+                )
+            requestArgs = {"updates": entry_updates, "v1": v1}
             return self._sendReceiveMsg(("set", requestArgs), timeout)
         return json.dumps({"error": "Invalid Attribute"})
 
@@ -175,11 +191,14 @@ class Backend(cli_backend.Backend):
     def subscribeMultiple(self, paths: Iterable[str], callback, attribute="value", timeout=5):
         if attribute in self.AttrDict:
             field, view = self.AttrDict[attribute]
-            entries = [kuksa_client.grpc.SubscribeEntry(
-                path=path, view=view, fields=(field,)) for path in paths]
+            entries = [
+                kuksa_client.grpc.SubscribeEntry(path=path, view=view, fields=(field,))
+                for path in paths
+            ]
             requestArgs = {
-                'entries': entries,
-                'callback': callback_wrapper(callback),
+                "entries": entries,
+                "v1": False,
+                "callback": callback_wrapper(callback),
             }
             return self._sendReceiveMsg(("subscribe", requestArgs), timeout)
 
@@ -222,8 +241,7 @@ class Backend(cli_backend.Backend):
     # Async function to handle the gRPC calls
     async def _grpcHandler(self, vss_client: kuksa_client.grpc.aio.VSSClient):
         self.run = True
-        subscriber_manager = kuksa_client.grpc.aio.SubscriberManager(
-            vss_client)
+        subscriber_manager = kuksa_client.grpc.aio.SubscriberManager(vss_client)
         self.grpc_connection_established = True
         while self.run:
             try:
@@ -273,7 +291,9 @@ class Backend(cli_backend.Backend):
     async def mainLoop(self):
         if self.insecure:
 
-            async with kuksa_client.grpc.aio.VSSClient(self.serverIP, self.serverPort, token=self.token) as vss_client:
+            async with kuksa_client.grpc.aio.VSSClient(
+                self.serverIP, self.serverPort, token=self.token
+            ) as vss_client:
                 logger.info("gRPC channel connected.")
                 await self._grpcHandler(vss_client)
         else:
@@ -282,7 +302,7 @@ class Backend(cli_backend.Backend):
                 self.serverPort,
                 root_certificates=self.cacertificate,
                 tls_server_name=self.tls_server_name,
-                token=self.token
+                token=self.token,
             ) as vss_client:
                 logger.info("Secure gRPC channel connected.")
                 await self._grpcHandler(vss_client)
