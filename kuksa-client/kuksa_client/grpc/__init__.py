@@ -36,75 +36,78 @@ from google.protobuf import json_format
 import grpc
 from grpc import RpcError
 
-from kuksa.val.v1 import types_pb2
-from kuksa.val.v1 import val_pb2
-from kuksa.val.v1 import val_pb2_grpc
+from kuksa.val.v1 import types_pb2 as types_v1
+from kuksa.val.v1 import val_pb2 as val_v1
+from kuksa.val.v1 import val_pb2_grpc as val_grpc_v1
+from kuksa.val.v2 import types_pb2 as types_v2
+from kuksa.val.v2 import val_pb2 as val_v2
+from kuksa.val.v2 import val_pb2_grpc as val_grpc_v2
 
 logger = logging.getLogger(__name__)
 
 
 class DataType(enum.IntEnum):
-    UNSPECIFIED = types_pb2.DATA_TYPE_UNSPECIFIED
-    STRING = types_pb2.DATA_TYPE_STRING
-    BOOLEAN = types_pb2.DATA_TYPE_BOOLEAN
-    INT8 = types_pb2.DATA_TYPE_INT8
-    INT16 = types_pb2.DATA_TYPE_INT16
-    INT32 = types_pb2.DATA_TYPE_INT32
-    INT64 = types_pb2.DATA_TYPE_INT64
-    UINT8 = types_pb2.DATA_TYPE_UINT8
-    UINT16 = types_pb2.DATA_TYPE_UINT16
-    UINT32 = types_pb2.DATA_TYPE_UINT32
-    UINT64 = types_pb2.DATA_TYPE_UINT64
-    FLOAT = types_pb2.DATA_TYPE_FLOAT
-    DOUBLE = types_pb2.DATA_TYPE_DOUBLE
-    TIMESTAMP = types_pb2.DATA_TYPE_TIMESTAMP
-    STRING_ARRAY = types_pb2.DATA_TYPE_STRING_ARRAY
-    BOOLEAN_ARRAY = types_pb2.DATA_TYPE_BOOLEAN_ARRAY
-    INT8_ARRAY = types_pb2.DATA_TYPE_INT8_ARRAY
-    INT16_ARRAY = types_pb2.DATA_TYPE_INT16_ARRAY
-    INT32_ARRAY = types_pb2.DATA_TYPE_INT32_ARRAY
-    INT64_ARRAY = types_pb2.DATA_TYPE_INT64_ARRAY
-    UINT8_ARRAY = types_pb2.DATA_TYPE_UINT8_ARRAY
-    UINT16_ARRAY = types_pb2.DATA_TYPE_UINT16_ARRAY
-    UINT32_ARRAY = types_pb2.DATA_TYPE_UINT32_ARRAY
-    UINT64_ARRAY = types_pb2.DATA_TYPE_UINT64_ARRAY
-    FLOAT_ARRAY = types_pb2.DATA_TYPE_FLOAT_ARRAY
-    DOUBLE_ARRAY = types_pb2.DATA_TYPE_DOUBLE_ARRAY
-    TIMESTAMP_ARRAY = types_pb2.DATA_TYPE_TIMESTAMP_ARRAY
+    UNSPECIFIED = types_v1.DATA_TYPE_UNSPECIFIED
+    STRING = types_v1.DATA_TYPE_STRING
+    BOOLEAN = types_v1.DATA_TYPE_BOOLEAN
+    INT8 = types_v1.DATA_TYPE_INT8
+    INT16 = types_v1.DATA_TYPE_INT16
+    INT32 = types_v1.DATA_TYPE_INT32
+    INT64 = types_v1.DATA_TYPE_INT64
+    UINT8 = types_v1.DATA_TYPE_UINT8
+    UINT16 = types_v1.DATA_TYPE_UINT16
+    UINT32 = types_v1.DATA_TYPE_UINT32
+    UINT64 = types_v1.DATA_TYPE_UINT64
+    FLOAT = types_v1.DATA_TYPE_FLOAT
+    DOUBLE = types_v1.DATA_TYPE_DOUBLE
+    TIMESTAMP = types_v1.DATA_TYPE_TIMESTAMP
+    STRING_ARRAY = types_v1.DATA_TYPE_STRING_ARRAY
+    BOOLEAN_ARRAY = types_v1.DATA_TYPE_BOOLEAN_ARRAY
+    INT8_ARRAY = types_v1.DATA_TYPE_INT8_ARRAY
+    INT16_ARRAY = types_v1.DATA_TYPE_INT16_ARRAY
+    INT32_ARRAY = types_v1.DATA_TYPE_INT32_ARRAY
+    INT64_ARRAY = types_v1.DATA_TYPE_INT64_ARRAY
+    UINT8_ARRAY = types_v1.DATA_TYPE_UINT8_ARRAY
+    UINT16_ARRAY = types_v1.DATA_TYPE_UINT16_ARRAY
+    UINT32_ARRAY = types_v1.DATA_TYPE_UINT32_ARRAY
+    UINT64_ARRAY = types_v1.DATA_TYPE_UINT64_ARRAY
+    FLOAT_ARRAY = types_v1.DATA_TYPE_FLOAT_ARRAY
+    DOUBLE_ARRAY = types_v1.DATA_TYPE_DOUBLE_ARRAY
+    TIMESTAMP_ARRAY = types_v1.DATA_TYPE_TIMESTAMP_ARRAY
 
 
 class EntryType(enum.IntEnum):
-    UNSPECIFIED = types_pb2.ENTRY_TYPE_UNSPECIFIED
-    ATTRIBUTE = types_pb2.ENTRY_TYPE_ATTRIBUTE
-    SENSOR = types_pb2.ENTRY_TYPE_SENSOR
-    ACTUATOR = types_pb2.ENTRY_TYPE_ACTUATOR
+    UNSPECIFIED = types_v1.ENTRY_TYPE_UNSPECIFIED
+    ATTRIBUTE = types_v1.ENTRY_TYPE_ATTRIBUTE
+    SENSOR = types_v1.ENTRY_TYPE_SENSOR
+    ACTUATOR = types_v1.ENTRY_TYPE_ACTUATOR
 
 
 class View(enum.IntEnum):
-    UNSPECIFIED = types_pb2.VIEW_UNSPECIFIED
-    CURRENT_VALUE = types_pb2.VIEW_CURRENT_VALUE
-    TARGET_VALUE = types_pb2.VIEW_TARGET_VALUE
-    METADATA = types_pb2.VIEW_METADATA
-    FIELDS = types_pb2.VIEW_FIELDS
-    ALL = types_pb2.VIEW_ALL
+    UNSPECIFIED = types_v1.VIEW_UNSPECIFIED
+    CURRENT_VALUE = types_v1.VIEW_CURRENT_VALUE
+    TARGET_VALUE = types_v1.VIEW_TARGET_VALUE
+    METADATA = types_v1.VIEW_METADATA
+    FIELDS = types_v1.VIEW_FIELDS
+    ALL = types_v1.VIEW_ALL
 
 
 class Field(enum.IntEnum):
-    UNSPECIFIED = types_pb2.FIELD_UNSPECIFIED
-    PATH = types_pb2.FIELD_PATH
-    VALUE = types_pb2.FIELD_VALUE
-    ACTUATOR_TARGET = types_pb2.FIELD_ACTUATOR_TARGET
-    METADATA = types_pb2.FIELD_METADATA
-    METADATA_DATA_TYPE = types_pb2.FIELD_METADATA_DATA_TYPE
-    METADATA_DESCRIPTION = types_pb2.FIELD_METADATA_DESCRIPTION
-    METADATA_ENTRY_TYPE = types_pb2.FIELD_METADATA_ENTRY_TYPE
-    METADATA_COMMENT = types_pb2.FIELD_METADATA_COMMENT
-    METADATA_DEPRECATION = types_pb2.FIELD_METADATA_DEPRECATION
-    METADATA_UNIT = types_pb2.FIELD_METADATA_UNIT
-    METADATA_VALUE_RESTRICTION = types_pb2.FIELD_METADATA_VALUE_RESTRICTION
-    METADATA_ACTUATOR = types_pb2.FIELD_METADATA_ACTUATOR
-    METADATA_SENSOR = types_pb2.FIELD_METADATA_SENSOR
-    METADATA_ATTRIBUTE = types_pb2.FIELD_METADATA_ATTRIBUTE
+    UNSPECIFIED = types_v1.FIELD_UNSPECIFIED
+    PATH = types_v1.FIELD_PATH
+    VALUE = types_v1.FIELD_VALUE
+    ACTUATOR_TARGET = types_v1.FIELD_ACTUATOR_TARGET
+    METADATA = types_v1.FIELD_METADATA
+    METADATA_DATA_TYPE = types_v1.FIELD_METADATA_DATA_TYPE
+    METADATA_DESCRIPTION = types_v1.FIELD_METADATA_DESCRIPTION
+    METADATA_ENTRY_TYPE = types_v1.FIELD_METADATA_ENTRY_TYPE
+    METADATA_COMMENT = types_v1.FIELD_METADATA_COMMENT
+    METADATA_DEPRECATION = types_v1.FIELD_METADATA_DEPRECATION
+    METADATA_UNIT = types_v1.FIELD_METADATA_UNIT
+    METADATA_VALUE_RESTRICTION = types_v1.FIELD_METADATA_VALUE_RESTRICTION
+    METADATA_ACTUATOR = types_v1.FIELD_METADATA_ACTUATOR
+    METADATA_SENSOR = types_v1.FIELD_METADATA_SENSOR
+    METADATA_ATTRIBUTE = types_v1.FIELD_METADATA_ATTRIBUTE
 
 
 class MetadataField(enum.Enum):
@@ -132,10 +135,17 @@ class VSSClientError(Exception):
         grpc_code, grpc_reason = error.code().value
         # TODO: Maybe details could hold an actual Error and/or repeated DataEntryError protobuf messages.
         #       This would allow 'code' to be an actual HTTP/VISS status code not a gRPC one.
-        return cls(error={'code': grpc_code, 'reason': grpc_reason, 'message': error.details()}, errors=[])
+        return cls(
+            error={
+                "code": grpc_code,
+                "reason": grpc_reason,
+                "message": error.details(),
+            },
+            errors=[],
+        )
 
     def to_dict(self) -> Dict[str, Any]:
-        return {'error': self.error, 'errors': self.errors}
+        return {"error": self.error, "errors": self.errors}
 
 
 @dataclasses.dataclass
@@ -157,39 +167,47 @@ class Metadata:
     # No support for entry_specific for now.
 
     @classmethod
-    def from_message(cls, message: types_pb2.Metadata):
-        metadata = cls(data_type=DataType(message.data_type),
-                       entry_type=EntryType(message.entry_type))
-        for field in ('description', 'comment', 'deprecation', 'unit'):
+    def from_message(cls, message: types_v1.Metadata):
+        metadata = cls(
+            data_type=DataType(message.data_type),
+            entry_type=EntryType(message.entry_type),
+        )
+        for field in ("description", "comment", "deprecation", "unit"):
             if message.HasField(field):
                 setattr(metadata, field, getattr(message, field))
-        if message.HasField('value_restriction'):
-            restriction_type = message.value_restriction.WhichOneof('type')
+        if message.HasField("value_restriction"):
+            restriction_type = message.value_restriction.WhichOneof("type")
             # Make sure that a type actually is set
             if restriction_type:
-                value_restriction = getattr(
-                    message.value_restriction, restriction_type)
+                value_restriction = getattr(message.value_restriction, restriction_type)
                 metadata.value_restriction = ValueRestriction()
                 # All types except string support min/max
-                if restriction_type != 'string':
-                    for field in ('min', 'max'):
+                if restriction_type != "string":
+                    for field in ("min", "max"):
                         if value_restriction.HasField(field):
-                            setattr(metadata.value_restriction, field,
-                                    getattr(value_restriction, field))
+                            setattr(
+                                metadata.value_restriction,
+                                field,
+                                getattr(value_restriction, field),
+                            )
                 if value_restriction.allowed_values:
                     metadata.value_restriction.allowed_values = list(
-                        value_restriction.allowed_values)
+                        value_restriction.allowed_values
+                    )
         return metadata
 
     # pylint: disable=too-many-branches
-    def to_message(self, value_type: DataType = DataType.UNSPECIFIED) -> types_pb2.Metadata:
+    def to_message(
+        self, value_type: DataType = DataType.UNSPECIFIED
+    ) -> types_v1.Metadata:
         """
         to_message/from_message aligned to use None rather than empty list for
         representing allowed values in value restrictions
         """
-        message = types_pb2.Metadata(
-            data_type=self.data_type.value, entry_type=self.entry_type.value)
-        for field in ('description', 'comment', 'deprecation', 'unit'):
+        message = types_v1.Metadata(
+            data_type=self.data_type.value, entry_type=self.entry_type.value
+        )
+        for field in ("description", "comment", "deprecation", "unit"):
             field_value = getattr(self, field, None)
             if field_value is not None:
                 setattr(message, field, field_value)
@@ -206,14 +224,15 @@ class Metadata:
             ):
                 if self.value_restriction.min is not None:
                     message.value_restriction.signed.min = int(
-                        self.value_restriction.min)
+                        self.value_restriction.min
+                    )
                 if self.value_restriction.max is not None:
                     message.value_restriction.signed.max = int(
-                        self.value_restriction.max)
+                        self.value_restriction.max
+                    )
                 if self.value_restriction.allowed_values:
                     message.value_restriction.signed.allowed_values.extend(
-                        (int(value)
-                         for value in self.value_restriction.allowed_values),
+                        (int(value) for value in self.value_restriction.allowed_values),
                     )
             elif value_type in (
                 DataType.UINT8,
@@ -227,14 +246,15 @@ class Metadata:
             ):
                 if self.value_restriction.min is not None:
                     message.value_restriction.unsigned.min = int(
-                        self.value_restriction.min)
+                        self.value_restriction.min
+                    )
                 if self.value_restriction.max is not None:
                     message.value_restriction.unsigned.max = int(
-                        self.value_restriction.max)
+                        self.value_restriction.max
+                    )
                 if self.value_restriction.allowed_values:
                     message.value_restriction.unsigned.allowed_values.extend(
-                        (int(value)
-                         for value in self.value_restriction.allowed_values),
+                        (int(value) for value in self.value_restriction.allowed_values),
                     )
             elif value_type in (
                 DataType.FLOAT,
@@ -244,14 +264,18 @@ class Metadata:
             ):
                 if self.value_restriction.min is not None:
                     message.value_restriction.floating_point.min = float(
-                        self.value_restriction.min)
+                        self.value_restriction.min
+                    )
                 if self.value_restriction.max is not None:
                     message.value_restriction.floating_point.max = float(
-                        self.value_restriction.max)
+                        self.value_restriction.max
+                    )
                 if self.value_restriction.allowed_values:
                     message.value_restriction.floating_point.allowed_values.extend(
-                        (float(value)
-                         for value in self.value_restriction.allowed_values),
+                        (
+                            float(value)
+                            for value in self.value_restriction.allowed_values
+                        ),
                     )
             elif value_type in (
                 DataType.STRING,
@@ -259,54 +283,57 @@ class Metadata:
             ):
                 if self.value_restriction.allowed_values:
                     message.value_restriction.string.allowed_values.extend(
-                        (str(value)
-                         for value in self.value_restriction.allowed_values),
+                        (str(value) for value in self.value_restriction.allowed_values),
                     )
             else:
                 raise ValueError(
-                    f"Cannot set value_restriction from data type {value_type.name}")
+                    f"Cannot set value_restriction from data type {value_type.name}"
+                )
         return message
+
     # pylint: enable=too-many-branches
 
     @classmethod
     def from_dict(cls, metadata_dict: Dict[str, Any]):
-        data_type = metadata_dict.get('data_type', DataType.UNSPECIFIED)
+        data_type = metadata_dict.get("data_type", DataType.UNSPECIFIED)
         if isinstance(data_type, str):
             data_type = getattr(DataType, data_type)
         else:
             data_type = DataType(data_type)
-        entry_type = metadata_dict.get('entry_type', EntryType.UNSPECIFIED)
+        entry_type = metadata_dict.get("entry_type", EntryType.UNSPECIFIED)
         if isinstance(entry_type, str):
             entry_type = getattr(EntryType, entry_type)
         else:
             entry_type = EntryType(entry_type)
         instance = cls(data_type=data_type, entry_type=entry_type)
-        for field in ('description', 'comment', 'deprecation', 'unit'):
+        for field in ("description", "comment", "deprecation", "unit"):
             field_value = metadata_dict.get(field, None)
             if field_value is not None:
                 setattr(instance, field, str(field_value))
-        value_restriction = metadata_dict.get('value_restriction')
+        value_restriction = metadata_dict.get("value_restriction")
         if value_restriction is not None:
             instance.value_restriction = ValueRestriction()
-            for field in ('min', 'max', 'allowed_values'):
+            for field in ("min", "max", "allowed_values"):
                 field_value = value_restriction.get(field)
                 if field_value is not None:
                     setattr(instance.value_restriction, field, field_value)
         return instance
 
     def to_dict(self) -> Dict[str, Any]:
-        out_dict = {'data_type': self.data_type.name,
-                    'entry_type': self.entry_type.name}
-        for field in ('description', 'comment', 'deprecation', 'unit'):
+        out_dict = {
+            "data_type": self.data_type.name,
+            "entry_type": self.entry_type.name,
+        }
+        for field in ("description", "comment", "deprecation", "unit"):
             field_value = getattr(self, field, None)
             if field_value is not None:
                 out_dict[field] = field_value
         if self.value_restriction is not None:
-            out_dict['value_restriction'] = {}
-            for field in ('min', 'max', 'allowed_values'):
+            out_dict["value_restriction"] = {}
+            for field in ("min", "max", "allowed_values"):
                 field_value = getattr(self.value_restriction, field, None)
                 if field_value is not None:
-                    out_dict['value_restriction'][field] = field_value
+                    out_dict["value_restriction"][field] = field_value
         return out_dict
 
 
@@ -316,32 +343,34 @@ class Datapoint:
     timestamp: Optional[datetime.datetime] = None
 
     @classmethod
-    def from_message(cls, message: types_pb2.Datapoint):
+    def from_message(cls, message: types_v1.Datapoint):
         """
         Return internal Datapoint representation or None on error
         """
-        if message.WhichOneof('value') is None:
+        if message.WhichOneof("value") is None:
             logger.warning("No value provided in datapoint!")
             return None
 
-        if message.HasField('timestamp'):
+        if message.HasField("timestamp"):
             # gRPC timestamp supports date up to including year 9999
             # If timestamp by any reason contains a larger number for seconds than supported
             # you may get an overflow error
             try:
                 timestamp = message.timestamp.ToDatetime(
-                            tzinfo=datetime.timezone.utc,
-                            )
+                    tzinfo=datetime.timezone.utc,
+                )
             except ValueError:
 
-                logger.error("Timestamp %d out of accepted range, value ignored!",
-                             message.timestamp.seconds)
+                logger.error(
+                    "Timestamp %d out of accepted range, value ignored!",
+                    message.timestamp.seconds,
+                )
                 return None
         else:
             timestamp = None
 
         return cls(
-            value=getattr(message, message.WhichOneof('value')),
+            value=getattr(message, message.WhichOneof("value")),
             timestamp=timestamp,
         )
 
@@ -351,7 +380,7 @@ class Datapoint:
         Note that input value to this function is not the same as given if you use kuksa-client command line
         as parts (e.g. surrounding quotes) are removed by shell, and then do_setValue also do some magic.
         """
-        array = array.strip('[]')
+        array = array.strip("[]")
 
         # Split the input string into separate values
         # First alternative, not quotes including escaped single or double quote, ends at comma, whitespace or EOL
@@ -359,22 +388,22 @@ class Datapoint:
         # double quote
         # Third is similar but for single quote
         # Using raw strings with surrounding single/double quotes to minimize need for escapes
-        pattern = r'(?:\\"|\\' + \
-                  r"'|[^'" + r'",])+|"(?:\\"|[^"])*"|' + \
-                  r"'(?:\\'|[^'])*'"
+        pattern = (
+            r'(?:\\"|\\' + r"'|[^'" + r'",])+|"(?:\\"|[^"])*"|' + r"'(?:\\'|[^'])*'"
+        )
         values = re.findall(pattern, array)
         for item in values:
             # We may in some cases match blanks, that is intended as we want to be able to write arguments like
             # My Way
             # ... without quotes
-            if item.strip() == '':
+            if item.strip() == "":
                 # skip
                 pass
             else:
                 yield cast(item)
 
     def cast_bool(value) -> bool:
-        if value in ('False', 'false', 'F', 'f'):
+        if value in ("False", "false", "F", "f"):
             value = 0
         return bool(value)
 
@@ -391,12 +420,12 @@ class Datapoint:
         if new_val.startswith("'") and new_val.endswith("'"):
             new_val = new_val[1:-1]
         # Replace escaped quotes with normal quotes
-        new_val = new_val.replace('\\\"', '\"')
-        new_val = new_val.replace("\\\'", "\'")
+        new_val = new_val.replace('\\"', '"')
+        new_val = new_val.replace("\\'", "'")
         return new_val
 
-    def to_message(self, value_type: DataType) -> types_pb2.Datapoint:
-        message = types_pb2.Datapoint()
+    def v1_to_message(self, value_type: DataType) -> types_v1.Datapoint:
+        message = types_v1.Datapoint()
 
         def set_array_attr(obj, attr, values):
             array = getattr(obj, attr)
@@ -404,42 +433,78 @@ class Datapoint:
             array.values.extend(values)
 
         field, set_field, cast_field = {
-            DataType.INT8: ('int32', setattr, int),
-            DataType.INT16: ('int32', setattr, int),
-            DataType.INT32: ('int32', setattr, int),
-            DataType.UINT8: ('uint32', setattr, int),
-            DataType.UINT16: ('uint32', setattr, int),
-            DataType.UINT32: ('uint32', setattr, int),
-            DataType.UINT64: ('uint64', setattr, int),
-            DataType.INT64: ('int64', setattr, int),
-            DataType.FLOAT: ('float', setattr, float),
-            DataType.DOUBLE: ('double', setattr, float),
-            DataType.BOOLEAN: ('bool', setattr, Datapoint.cast_bool),
-            DataType.STRING: ('string', setattr, Datapoint.cast_str),
-            DataType.INT8_ARRAY: ('int32_array', set_array_attr,
-                                  lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.INT16_ARRAY: ('int32_array', set_array_attr,
-                                   lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.INT32_ARRAY: ('int32_array', set_array_attr,
-                                   lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.UINT8_ARRAY: ('uint32_array', set_array_attr,
-                                   lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.UINT16_ARRAY: ('uint32_array', set_array_attr,
-                                    lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.UINT32_ARRAY: ('uint32_array', set_array_attr,
-                                    lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.UINT64_ARRAY: ('uint64_array', set_array_attr,
-                                    lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.INT64_ARRAY: ('int64_array', set_array_attr,
-                                   lambda array: Datapoint.cast_array_values(int, array)),
-            DataType.FLOAT_ARRAY: ('float_array', set_array_attr,
-                                   lambda array: Datapoint.cast_array_values(float, array)),
-            DataType.DOUBLE_ARRAY: ('double_array', set_array_attr,
-                                    lambda array: Datapoint.cast_array_values(float, array)),
-            DataType.BOOLEAN_ARRAY: ('bool_array', set_array_attr,
-                                     lambda array: Datapoint.cast_array_values(Datapoint.cast_bool, array)),
-            DataType.STRING_ARRAY: ('string_array', set_array_attr,
-                                    lambda array: Datapoint.cast_array_values(Datapoint.cast_str, array)),
+            DataType.INT8: ("int32", setattr, int),
+            DataType.INT16: ("int32", setattr, int),
+            DataType.INT32: ("int32", setattr, int),
+            DataType.UINT8: ("uint32", setattr, int),
+            DataType.UINT16: ("uint32", setattr, int),
+            DataType.UINT32: ("uint32", setattr, int),
+            DataType.UINT64: ("uint64", setattr, int),
+            DataType.INT64: ("int64", setattr, int),
+            DataType.FLOAT: ("float", setattr, float),
+            DataType.DOUBLE: ("double", setattr, float),
+            DataType.BOOLEAN: ("bool", setattr, Datapoint.cast_bool),
+            DataType.STRING: ("string", setattr, Datapoint.cast_str),
+            DataType.INT8_ARRAY: (
+                "int32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.INT16_ARRAY: (
+                "int32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.INT32_ARRAY: (
+                "int32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT8_ARRAY: (
+                "uint32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT16_ARRAY: (
+                "uint32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT32_ARRAY: (
+                "uint32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT64_ARRAY: (
+                "uint64_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.INT64_ARRAY: (
+                "int64_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.FLOAT_ARRAY: (
+                "float_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(float, array),
+            ),
+            DataType.DOUBLE_ARRAY: (
+                "double_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(float, array),
+            ),
+            DataType.BOOLEAN_ARRAY: (
+                "bool_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(Datapoint.cast_bool, array),
+            ),
+            DataType.STRING_ARRAY: (
+                "string_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(Datapoint.cast_str, array),
+            ),
         }.get(value_type, (None, None, None))
         if self.value is not None:
             if all((field, set_field, cast_field)):
@@ -453,12 +518,108 @@ class Datapoint:
             message.timestamp.FromDatetime(self.timestamp)
         return message
 
+    def v2_to_message(self, value_type: DataType) -> types_v2.Datapoint:
+        message = types_v2.Datapoint()
+        value = types_v2.Value()
+
+        def set_array_attr(obj, attr, values):
+            array = getattr(obj, attr)
+            array.Clear()
+            array.values.extend(values)
+
+        field, set_field, cast_field = {
+            DataType.INT8: ("int32", setattr, int),
+            DataType.INT16: ("int32", setattr, int),
+            DataType.INT32: ("int32", setattr, int),
+            DataType.UINT8: ("uint32", setattr, int),
+            DataType.UINT16: ("uint32", setattr, int),
+            DataType.UINT32: ("uint32", setattr, int),
+            DataType.UINT64: ("uint64", setattr, int),
+            DataType.INT64: ("int64", setattr, int),
+            DataType.FLOAT: ("float", setattr, float),
+            DataType.DOUBLE: ("double", setattr, float),
+            DataType.BOOLEAN: ("bool", setattr, Datapoint.cast_bool),
+            DataType.STRING: ("string", setattr, Datapoint.cast_str),
+            DataType.INT8_ARRAY: (
+                "int32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.INT16_ARRAY: (
+                "int32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.INT32_ARRAY: (
+                "int32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT8_ARRAY: (
+                "uint32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT16_ARRAY: (
+                "uint32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT32_ARRAY: (
+                "uint32_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.UINT64_ARRAY: (
+                "uint64_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.INT64_ARRAY: (
+                "int64_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(int, array),
+            ),
+            DataType.FLOAT_ARRAY: (
+                "float_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(float, array),
+            ),
+            DataType.DOUBLE_ARRAY: (
+                "double_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(float, array),
+            ),
+            DataType.BOOLEAN_ARRAY: (
+                "bool_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(Datapoint.cast_bool, array),
+            ),
+            DataType.STRING_ARRAY: (
+                "string_array",
+                set_array_attr,
+                lambda array: Datapoint.cast_array_values(Datapoint.cast_str, array),
+            ),
+        }.get(value_type, (None, None, None))
+        if self.value is not None:
+            if all((field, set_field, cast_field)):
+                set_field(value, field, cast_field(self.value))
+                message.value.CopyFrom(value)
+            else:
+                # Either DataType.TIMESTAMP, DataType.TIMESTAMP_ARRAY or DataType.UNSPECIFIED...
+                raise ValueError(
+                    f"Cannot determine which field to set with data type {value_type} from value {self.value}",
+                )
+        if self.timestamp is not None:
+            message.timestamp.FromDatetime(self.timestamp)
+        return message
+
     def to_dict(self) -> Dict[str, Any]:
         out_dict = {}
         if self.value is not None:
-            out_dict['value'] = self.value
+            out_dict["value"] = self.value
         if self.timestamp is not None:
-            out_dict['timestamp'] = self.timestamp.isoformat()
+            out_dict["timestamp"] = self.timestamp.isoformat()
         return out_dict
 
 
@@ -473,37 +634,38 @@ class DataEntry:
     value_type: DataType = DataType.UNSPECIFIED
 
     @classmethod
-    def from_message(cls, message: types_pb2.DataEntry):
-        entry_kwargs = {'path': message.path}
-        if message.HasField('value'):
-            entry_kwargs['value'] = Datapoint.from_message(message.value)
-        if message.HasField('actuator_target'):
-            entry_kwargs['actuator_target'] = Datapoint.from_message(
-                message.actuator_target)
-        if message.HasField('metadata'):
-            entry_kwargs['metadata'] = Metadata.from_message(message.metadata)
+    def from_message(cls, message: types_v1.DataEntry):
+        entry_kwargs = {"path": message.path}
+        if message.HasField("value"):
+            entry_kwargs["value"] = Datapoint.from_message(message.value)
+        if message.HasField("actuator_target"):
+            entry_kwargs["actuator_target"] = Datapoint.from_message(
+                message.actuator_target
+            )
+        if message.HasField("metadata"):
+            entry_kwargs["metadata"] = Metadata.from_message(message.metadata)
         return cls(**entry_kwargs)
 
-    def to_message(self) -> types_pb2.DataEntry:
-        message = types_pb2.DataEntry(path=self.path)
+    def to_message(self) -> types_v1.DataEntry:
+        message = types_v1.DataEntry(path=self.path)
         if self.value is not None:
-            message.value.MergeFrom(self.value.to_message(self.value_type))
+            message.value.MergeFrom(self.value.v1_to_message(self.value_type))
         if self.actuator_target is not None:
             message.actuator_target.MergeFrom(
-                self.actuator_target.to_message(self.value_type))
+                self.actuator_target.v1_to_message(self.value_type)
+            )
         if self.metadata is not None:
-            message.metadata.MergeFrom(
-                self.metadata.to_message(self.value_type))
+            message.metadata.MergeFrom(self.metadata.to_message(self.value_type))
         return message
 
     def to_dict(self) -> Dict[str, Any]:
-        out_dict = {'path': self.path}
+        out_dict = {"path": self.path}
         if self.value is not None:
-            out_dict['value'] = self.value.to_dict()
+            out_dict["value"] = self.value.to_dict()
         if self.actuator_target is not None:
-            out_dict['actuator_target'] = self.actuator_target.to_dict()
+            out_dict["actuator_target"] = self.actuator_target.to_dict()
         if self.metadata is not None:
-            out_dict['metadata'] = self.metadata.to_dict()
+            out_dict["metadata"] = self.metadata.to_dict()
         return out_dict
 
 
@@ -520,19 +682,39 @@ class EntryUpdate:
     fields: Iterable[Field]
 
     @classmethod
-    def from_message(cls, message: val_pb2.EntryUpdate):
+    def from_message(cls, message: val_v1.EntryUpdate):
         return cls(
             entry=DataEntry.from_message(message.entry),
             fields=[Field(field) for field in message.fields],
         )
 
-    def to_message(self) -> val_pb2.EntryUpdate:
-        message = val_pb2.EntryUpdate(entry=self.entry.to_message())
+    @classmethod
+    def from_tuple(cls, path: str, dp: types_v2.Datapoint):
+        if dp.failure:
+            print(f"An error for {path} occurred: {dp.failure}")
+            return cls(None)
+        else:
+            # we assume here that only one field of Value is set -> we use the first entry.
+            # This should always be the case.
+            data = dp.value.ListFields()
+            field_descriptor, value = data[0]
+            field_name = field_descriptor.name
+            value = getattr(dp.value, field_name)
+            return cls(
+                entry=DataEntry(path=path, value=Datapoint(value)),
+                fields=[Field(value=types_v1.FIELD_VALUE)],
+            )
+
+    def to_message(self) -> val_v1.EntryUpdate:
+        message = val_v1.EntryUpdate(entry=self.entry.to_message())
         message.fields.extend(field.value for field in self.fields)
         return message
 
     def to_dict(self) -> Dict[str, Any]:
-        return {'entry': self.entry.to_dict(), 'fields': [field.name for field in self.fields]}
+        return {
+            "entry": self.entry.to_dict(),
+            "fields": [field.name for field in self.fields],
+        }
 
 
 @dataclasses.dataclass
@@ -548,11 +730,12 @@ class ServerInfo:
     version: str
 
     @classmethod
-    def from_message(cls, message: val_pb2.GetServerInfoResponse):
+    def from_message(cls, message: val_v1.GetServerInfoResponse):
         return cls(name=message.name, version=message.version)
 
 
 class BaseVSSClient:
+
     def __init__(
         self,
         host: str,
@@ -561,50 +744,58 @@ class BaseVSSClient:
         root_certificates: Optional[Path] = None,
         ensure_startup_connection: bool = True,
         connected: bool = False,
-        tls_server_name: Optional[str] = None
+        tls_server_name: Optional[str] = None,
     ):
 
         self.authorization_header = self.get_authorization_header(token)
-        self.target_host = f'{host}:{port}'
+        self.target_host = f"{host}:{port}"
         self.root_certificates = root_certificates
         self.tls_server_name = tls_server_name
         self.ensure_startup_connection = ensure_startup_connection
         self.connected = connected
-        self.client_stub = None
+        self.client_stub_v1 = None
+        self.client_stub_v2 = None
 
     def _load_creds(self) -> Optional[grpc.ChannelCredentials]:
         if self.root_certificates:
             logger.info(f"Using TLS with Root CA from {self.root_certificates}")
             root_certificates = self.root_certificates.read_bytes()
             return grpc.ssl_channel_credentials(root_certificates)
-        logger.info("No Root CA present, it will not be possible to use a secure connection!")
+        logger.info(
+            "No Root CA present, it will not be possible to use a secure connection!"
+        )
         return None
 
-    def _prepare_get_request(self, entries: Iterable[EntryRequest]) -> val_pb2.GetRequest:
-        req = val_pb2.GetRequest(entries=[])
+    def _prepare_get_request(
+        self, entries: Iterable[EntryRequest]
+    ) -> val_v1.GetRequest:
+        req = val_v1.GetRequest(entries=[])
         for entry in entries:
-            entry_request = val_pb2.EntryRequest(
-                path=entry.path, view=entry.view.value, fields=[])
+            entry_request = val_v1.EntryRequest(
+                path=entry.path, view=entry.view.value, fields=[]
+            )
             for field in entry.fields:
                 entry_request.fields.append(field.value)
             req.entries.append(entry_request)
         logger.debug("%s: %s", type(req).__name__, req)
         return req
 
-    def _process_get_response(self, response: val_pb2.GetResponse) -> List[DataEntry]:
+    def _process_get_response(self, response: val_v1.GetResponse) -> List[DataEntry]:
         logger.debug("%s: %s", type(response).__name__, response)
         self._raise_if_invalid(response)
         return [DataEntry.from_message(entry) for entry in response.entries]
 
-    def _get_paths_with_required_type(self, updates: Collection[EntryUpdate]) -> Dict[str, DataType]:
+    def _get_paths_with_required_type(
+        self, updates: Collection[EntryUpdate]
+    ) -> Dict[str, DataType]:
         paths_with_required_type = {}
         for update in updates:
             metadata = update.entry.metadata
             # We need a data type in order to set sensor/actuator value or metadata's value restriction
             if (
-                Field.ACTUATOR_TARGET in update.fields or
-                Field.VALUE in update.fields or
-                (metadata is not None and metadata.value_restriction is not None)
+                Field.ACTUATOR_TARGET in update.fields
+                or Field.VALUE in update.fields
+                or (metadata is not None and metadata.value_restriction is not None)
             ):
                 # If the update holds a new data type, we assume it will be applied before
                 # setting the sensor/actuator value.
@@ -614,9 +805,11 @@ class BaseVSSClient:
         return paths_with_required_type
 
     def _prepare_set_request(
-        self, updates: Collection[EntryUpdate], paths_with_required_type: Dict[str, DataType],
-    ) -> val_pb2.SetRequest:
-        req = val_pb2.SetRequest(updates=[])
+        self,
+        updates: Collection[EntryUpdate],
+        paths_with_required_type: Dict[str, DataType],
+    ) -> val_v1.SetRequest:
+        req = val_v1.SetRequest(updates=[])
         for update in updates:
             value_type = paths_with_required_type.get(update.entry.path)
             if value_type is not None:
@@ -625,43 +818,77 @@ class BaseVSSClient:
         logger.debug("%s: %s", type(req).__name__, req)
         return req
 
-    def _process_set_response(self, response: val_pb2.SetResponse) -> None:
+    def _prepare_publish_value_request(
+        self,
+        update: EntryUpdate,
+        paths_with_required_type: Dict[str, DataType],
+    ) -> val_v2.PublishValueRequest:
+        value_type = paths_with_required_type.get(update.entry.path)
+        if value_type is not None:
+            update.entry.value_type = value_type
+        req = val_v2.PublishValueRequest(
+            signal_id=types_v2.SignalID(path=update.entry.path),
+            data_point=update.entry.value.v2_to_message(update.entry.value_type),
+        )
+        logger.debug("%s: %s", type(req).__name__, req)
+        return req
+
+    def _process_set_response(self, response: val_v1.SetResponse) -> None:
         logger.debug("%s: %s", type(response).__name__, response)
         self._raise_if_invalid(response)
 
     def _prepare_subscribe_request(
-        self, entries: Iterable[SubscribeEntry],
-    ) -> val_pb2.SubscribeRequest:
-        req = val_pb2.SubscribeRequest()
+        self,
+        entries: Iterable[SubscribeEntry],
+    ) -> val_v1.SubscribeRequest:
+        req = val_v1.SubscribeRequest()
         for entry in entries:
-            entry_request = val_pb2.SubscribeEntry(
-                path=entry.path, view=entry.view.value, fields=[])
+            entry_request = val_v1.SubscribeEntry(
+                path=entry.path, view=entry.view.value, fields=[]
+            )
             for field in entry.fields:
                 entry_request.fields.append(field.value)
             req.entries.append(entry_request)
         logger.debug("%s: %s", type(req).__name__, req)
         return req
 
+    def _prepare_subscribev2_request(
+        self,
+        entries: Iterable[SubscribeEntry],
+    ) -> val_v2.SubscribeRequest:
+        paths = []
+        for entry in entries:
+            paths.append(entry.path)
+        req = val_v2.SubscribeRequest(signal_paths=paths)
+        logger.debug("%s: %s", type(req).__name__, req)
+        return req
+
     def _raise_if_invalid(self, response):
-        if response.HasField('error'):
+        if response.HasField("error"):
             error = json_format.MessageToDict(
-                response.error, preserving_proto_field_name=True)
+                response.error, preserving_proto_field_name=True
+            )
         else:
             error = {}
         if response.errors:
-            errors = [json_format.MessageToDict(
-                err, preserving_proto_field_name=True) for err in response.errors]
+            errors = [
+                json_format.MessageToDict(err, preserving_proto_field_name=True)
+                for err in response.errors
+            ]
         else:
             errors = []
 
         raise_error = False
-        if (error and error.get('code') != 200):
+        if error and error.get("code") != 200:
             raise_error = True
         else:
             for sub_error in errors:
-                if 'error' in sub_error:
-                    if sub_error['error'].get('code') != 200:
-                        logger.debug("Sub-error %d but no top level error", sub_error['error'].get('code'))
+                if "error" in sub_error:
+                    if sub_error["error"].get("code") != 200:
+                        logger.debug(
+                            "Sub-error %d but no top level error",
+                            sub_error["error"].get("code"),
+                        )
                         raise_error = True
                 else:
                     logger.error("No error field for sub-error")
@@ -691,6 +918,7 @@ class VSSClient(BaseVSSClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.channel = None
+        self.channel2 = None
         self.exit_stack = contextlib.ExitStack()
 
     def __enter__(self):
@@ -707,7 +935,10 @@ class VSSClient(BaseVSSClient):
             else:
                 # This shall normally not happen if you use the client as context manager
                 # as then a connect will happen automatically when you enter the context
-                raise Exception("Server not connected! Call connect() before using this command!")
+                raise Exception(
+                    "Server not connected! Call connect() before using this command!"
+                )
+
         return wrapper
 
     def connect(self, target_host=None):
@@ -719,29 +950,38 @@ class VSSClient(BaseVSSClient):
             logger.info("Establishing secure channel")
             if self.tls_server_name:
                 logger.info(f"Using TLS server name {self.tls_server_name}")
-                options = [('grpc.ssl_target_name_override', self.tls_server_name)]
+                options = [("grpc.ssl_target_name_override", self.tls_server_name)]
                 channel = grpc.secure_channel(target_host, creds, options)
+                channel2 = grpc.secure_channel(target_host, creds, options)
             else:
                 logger.debug("Not providing explicit TLS server name")
                 channel = grpc.secure_channel(target_host, creds)
+                channel2 = grpc.secure_channel(target_host, creds)
         else:
             logger.info("Establishing insecure channel")
             channel = grpc.insecure_channel(target_host)
+            channel2 = grpc.insecure_channel(target_host)
 
         self.channel = self.exit_stack.enter_context(channel)
-        self.client_stub = val_pb2_grpc.VALStub(self.channel)
+        self.channel2 = self.exit_stack.enter_context(channel2)
+        self.client_stub_v1 = val_grpc_v1.VALStub(self.channel)
+        self.client_stub_v2 = val_grpc_v2.VALStub(self.channel2)
         self.connected = True
         if self.ensure_startup_connection:
             logger.debug("Connected to server: %s", self.get_server_info())
 
     def disconnect(self):
         self.exit_stack.close()
-        self.client_stub = None
+        self.client_stub_v1 = None
+        self.client_stub_v2 = None
         self.channel = None
+        self.channel2 = None
         self.connected = False
 
     @check_connected
-    def get_current_values(self, paths: Iterable[str], **rpc_kwargs) -> Dict[str, Datapoint]:
+    def get_current_values(
+        self, paths: Iterable[str], **rpc_kwargs
+    ) -> Dict[str, Datapoint]:
         """
         Parameters:
             rpc_kwargs
@@ -754,12 +994,17 @@ class VSSClient(BaseVSSClient):
             speed_value = current_values['Vehicle.Speed'].value
         """
         entries = self.get(
-            entries=(EntryRequest(path, View.CURRENT_VALUE, (Field.VALUE,)) for path in paths), **rpc_kwargs,
+            entries=(
+                EntryRequest(path, View.CURRENT_VALUE, (Field.VALUE,)) for path in paths
+            ),
+            **rpc_kwargs,
         )
         return {entry.path: entry.value for entry in entries}
 
     @check_connected
-    def get_target_values(self, paths: Iterable[str], **rpc_kwargs) -> Dict[str, Datapoint]:
+    def get_target_values(
+        self, paths: Iterable[str], **rpc_kwargs
+    ) -> Dict[str, Datapoint]:
         """
         Parameters:
             rpc_kwargs
@@ -770,14 +1015,25 @@ class VSSClient(BaseVSSClient):
             ])
             is_abs_to_become_active = target_values['Vehicle.ADAS.ABS.IsActive'].value
         """
-        entries = self.get(entries=(
-            EntryRequest(path, View.TARGET_VALUE, (Field.ACTUATOR_TARGET,),
-                         ) for path in paths), **rpc_kwargs)
+        entries = self.get(
+            entries=(
+                EntryRequest(
+                    path,
+                    View.TARGET_VALUE,
+                    (Field.ACTUATOR_TARGET,),
+                )
+                for path in paths
+            ),
+            **rpc_kwargs,
+        )
         return {entry.path: entry.actuator_target for entry in entries}
 
     @check_connected
     def get_metadata(
-        self, paths: Iterable[str], field: MetadataField = MetadataField.ALL, **rpc_kwargs,
+        self,
+        paths: Iterable[str],
+        field: MetadataField = MetadataField.ALL,
+        **rpc_kwargs,
     ) -> Dict[str, Metadata]:
         """
         Parameters:
@@ -791,7 +1047,11 @@ class VSSClient(BaseVSSClient):
             speed_unit = metadata['Vehicle.Speed'].unit
         """
         entries = self.get(
-            entries=(EntryRequest(path, View.METADATA, (Field(field.value),)) for path in paths), **rpc_kwargs,
+            entries=(
+                EntryRequest(path, View.METADATA, (Field(field.value),))
+                for path in paths
+            ),
+            **rpc_kwargs,
         )
         return {entry.path: entry.metadata for entry in entries}
 
@@ -808,8 +1068,11 @@ class VSSClient(BaseVSSClient):
             })
         """
         self.set(
-            updates=[EntryUpdate(DataEntry(path, value=dp), (Field.VALUE,))
-                     for path, dp in updates.items()],
+            updates=[
+                EntryUpdate(DataEntry(path, value=dp), (Field.VALUE,))
+                for path, dp in updates.items()
+            ],
+            v1=False,
             **rpc_kwargs,
         )
 
@@ -823,13 +1086,23 @@ class VSSClient(BaseVSSClient):
             client.set_target_values(
                 {'Vehicle.ADAS.ABS.IsActive': Datapoint(True)})
         """
-        self.set(updates=[EntryUpdate(
-            DataEntry(path, actuator_target=dp), (Field.ACTUATOR_TARGET,),
-        ) for path, dp in updates.items()], **rpc_kwargs)
+        self.set(
+            updates=[
+                EntryUpdate(
+                    DataEntry(path, actuator_target=dp),
+                    (Field.ACTUATOR_TARGET,),
+                )
+                for path, dp in updates.items()
+            ],
+            **rpc_kwargs,
+        )
 
     @check_connected
     def set_metadata(
-        self, updates: Dict[str, Metadata], field: MetadataField = MetadataField.ALL, **rpc_kwargs,
+        self,
+        updates: Dict[str, Metadata],
+        field: MetadataField = MetadataField.ALL,
+        **rpc_kwargs,
     ) -> None:
         """
         Parameters:
@@ -840,12 +1113,21 @@ class VSSClient(BaseVSSClient):
                 'Vehicle.Cabin.Door.Row1.Left.Shade.Position': Metadata(data_type=DataType.FLOAT),
             })
         """
-        self.set(updates=[EntryUpdate(
-            DataEntry(path, metadata=md), (Field(field.value),),
-        ) for path, md in updates.items()], **rpc_kwargs)
+        self.set(
+            updates=[
+                EntryUpdate(
+                    DataEntry(path, metadata=md),
+                    (Field(field.value),),
+                )
+                for path, md in updates.items()
+            ],
+            **rpc_kwargs,
+        )
 
     @check_connected
-    def subscribe_current_values(self, paths: Iterable[str], **rpc_kwargs) -> Iterator[Dict[str, Datapoint]]:
+    def subscribe_current_values(
+        self, paths: Iterable[str], **rpc_kwargs
+    ) -> Iterator[Dict[str, Datapoint]]:
         """
         Parameters:
             rpc_kwargs
@@ -858,14 +1140,18 @@ class VSSClient(BaseVSSClient):
                     print(f"Current value for {path} is now: {dp.value}")
         """
         for updates in self.subscribe(
-            entries=(SubscribeEntry(path, View.CURRENT_VALUE, (Field.VALUE,))
-                     for path in paths),
+            entries=(
+                SubscribeEntry(path, View.CURRENT_VALUE, (Field.VALUE,))
+                for path in paths
+            ),
             **rpc_kwargs,
         ):
             yield {update.entry.path: update.entry.value for update in updates}
 
     @check_connected
-    def subscribe_target_values(self, paths: Iterable[str], **rpc_kwargs) -> Iterator[Dict[str, Datapoint]]:
+    def subscribe_target_values(
+        self, paths: Iterable[str], **rpc_kwargs
+    ) -> Iterator[Dict[str, Datapoint]]:
         """
         Parameters:
             rpc_kwargs
@@ -878,15 +1164,20 @@ class VSSClient(BaseVSSClient):
                     print(f"Target value for {path} is now: {dp.value}")
         """
         for updates in self.subscribe(
-            entries=(SubscribeEntry(path, View.TARGET_VALUE,
-                     (Field.ACTUATOR_TARGET,)) for path in paths),
+            entries=(
+                SubscribeEntry(path, View.TARGET_VALUE, (Field.ACTUATOR_TARGET,))
+                for path in paths
+            ),
             **rpc_kwargs,
         ):
-            yield {update.entry.path: update.entry.actuator_target for update in updates}
+            yield {
+                update.entry.path: update.entry.actuator_target for update in updates
+            }
 
     @check_connected
     def subscribe_metadata(
-        self, paths: Iterable[str],
+        self,
+        paths: Iterable[str],
         field: MetadataField = MetadataField.ALL,
         **rpc_kwargs,
     ) -> Iterator[Dict[str, Metadata]]:
@@ -903,8 +1194,10 @@ class VSSClient(BaseVSSClient):
                     print(f"Metadata for {path} are now: {md.to_dict()}")
         """
         for updates in self.subscribe(
-            entries=(SubscribeEntry(path, View.METADATA, (Field(field.value),))
-                     for path in paths),
+            entries=(
+                SubscribeEntry(path, View.METADATA, (Field(field.value),))
+                for path in paths
+            ),
             **rpc_kwargs,
         ):
             yield {update.entry.path: update.entry.metadata for update in updates}
@@ -917,38 +1210,58 @@ class VSSClient(BaseVSSClient):
                 grpc.*MultiCallable kwargs e.g. timeout, metadata, credentials.
         """
         rpc_kwargs["metadata"] = self.generate_metadata_header(
-            rpc_kwargs.get("metadata"))
+            rpc_kwargs.get("metadata")
+        )
         req = self._prepare_get_request(entries)
         try:
-            resp = self.client_stub.Get(req, **rpc_kwargs)
+            resp = self.client_stub_v1.Get(req, **rpc_kwargs)
         except RpcError as exc:
             raise VSSClientError.from_grpc_error(exc) from exc
         return self._process_get_response(resp)
 
     @check_connected
-    def set(self, updates: Collection[EntryUpdate], **rpc_kwargs) -> None:
+    def set(
+        self, updates: Collection[EntryUpdate], v1: bool = True, **rpc_kwargs
+    ) -> None:
         """
         Parameters:
             rpc_kwargs
                 grpc.*MultiCallable kwargs e.g. timeout, metadata, credentials.
         """
         rpc_kwargs["metadata"] = self.generate_metadata_header(
-            rpc_kwargs.get("metadata"))
+            rpc_kwargs.get("metadata")
+        )
         paths_with_required_type = self._get_paths_with_required_type(updates)
         paths_without_type = [
-            path for path, data_type in paths_with_required_type.items() if data_type is DataType.UNSPECIFIED
+            path
+            for path, data_type in paths_with_required_type.items()
+            if data_type is DataType.UNSPECIFIED
         ]
         paths_with_required_type.update(
-            self.get_value_types(paths_without_type, **rpc_kwargs))
-        req = self._prepare_set_request(updates, paths_with_required_type)
-        try:
-            resp = self.client_stub.Set(req, **rpc_kwargs)
-        except RpcError as exc:
-            raise VSSClientError.from_grpc_error(exc) from exc
-        self._process_set_response(resp)
+            self.get_value_types(paths_without_type, **rpc_kwargs)
+        )
+        if v1:
+            req = self._prepare_set_request(updates, paths_with_required_type)
+            try:
+                resp = self.client_stub_v1.Set(req, **rpc_kwargs)
+            except RpcError as exc:
+                raise VSSClientError.from_grpc_error(exc) from exc
+            self._process_set_response(resp)
+        else:
+            logger.info("Using v2")
+            for update in updates:
+                req = self._prepare_publish_value_request(
+                    update, paths_with_required_type
+                )
+                try:
+                    resp = self.client_stub_v2.PublishValueRequest(req, **rpc_kwargs)
+                except RpcError as exc:
+                    raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
-    def subscribe(self, entries: Iterable[SubscribeEntry], **rpc_kwargs) -> Iterator[List[EntryUpdate]]:
+    def subscribe(
+        self, entries: Iterable[SubscribeEntry], **rpc_kwargs
+    ) -> Iterator[List[EntryUpdate]]:
         """
         Parameters:
             rpc_kwargs
@@ -956,9 +1269,10 @@ class VSSClient(BaseVSSClient):
         """
 
         rpc_kwargs["metadata"] = self.generate_metadata_header(
-            rpc_kwargs.get("metadata"))
+            rpc_kwargs.get("metadata")
+        )
         req = self._prepare_subscribe_request(entries)
-        resp_stream = self.client_stub.Subscribe(req, **rpc_kwargs)
+        resp_stream = self.client_stub_v1.Subscribe(req, **rpc_kwargs)
         try:
             for resp in resp_stream:
                 logger.debug("%s: %s", type(resp).__name__, resp)
@@ -976,10 +1290,12 @@ class VSSClient(BaseVSSClient):
                 string containing the actual token
         """
         rpc_kwargs["metadata"] = self.generate_metadata_header(
-            metadata=rpc_kwargs.get("metadata"), header=self.get_authorization_header(token))
-        req = val_pb2.GetServerInfoRequest()
+            metadata=rpc_kwargs.get("metadata"),
+            header=self.get_authorization_header(token),
+        )
+        req = val_v1.GetServerInfoRequest()
         try:
-            resp = self.client_stub.GetServerInfo(req, **rpc_kwargs)
+            resp = self.client_stub_v1.GetServerInfo(req, **rpc_kwargs)
         except RpcError as exc:
             raise VSSClientError.from_grpc_error(exc) from exc
         logger.debug("%s: %s", type(resp).__name__, resp)
@@ -994,11 +1310,12 @@ class VSSClient(BaseVSSClient):
                 grpc.*MultiCallable kwargs e.g. timeout, metadata, credentials.
         """
         rpc_kwargs["metadata"] = self.generate_metadata_header(
-            metadata=rpc_kwargs.get("metadata"))
-        req = val_pb2.GetServerInfoRequest()
+            metadata=rpc_kwargs.get("metadata")
+        )
+        req = val_v1.GetServerInfoRequest()
         logger.debug("%s: %s", type(req).__name__, req)
         try:
-            resp = self.client_stub.GetServerInfo(req, **rpc_kwargs)
+            resp = self.client_stub_v1.GetServerInfo(req, **rpc_kwargs)
             logger.debug("%s: %s", type(resp).__name__, resp)
             return ServerInfo.from_message(resp)
         except RpcError as exc:
@@ -1009,7 +1326,9 @@ class VSSClient(BaseVSSClient):
         return None
 
     @check_connected
-    def get_value_types(self, paths: Collection[str], **rpc_kwargs) -> Dict[str, DataType]:
+    def get_value_types(
+        self, paths: Collection[str], **rpc_kwargs
+    ) -> Dict[str, DataType]:
         """
         Parameters:
             rpc_kwargs
@@ -1017,10 +1336,14 @@ class VSSClient(BaseVSSClient):
         req = self._prepare_get_request(entries)
         """
         if paths:
-            entry_requests = (EntryRequest(
-                path=path, view=View.METADATA, fields=(
-                    Field.METADATA_DATA_TYPE,),
-            ) for path in paths)
+            entry_requests = (
+                EntryRequest(
+                    path=path,
+                    view=View.METADATA,
+                    fields=(Field.METADATA_DATA_TYPE,),
+                )
+                for path in paths
+            )
             entries = self.get(entries=entry_requests, **rpc_kwargs)
             return {entry.path: DataType(entry.metadata.data_type) for entry in entries}
         return {}
