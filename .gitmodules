@@ -1,5 +1,6 @@
 
+
 [submodule "kuksa-databroker"]
 	path = submodules/kuksa-databroker
-	url = https://github.com/SoftwareDefinedVehicle/kuksa-databroker.git
-	branch = rel-0.5.0
+	url = https://github.com/boschglobal/kuksa-databroker.git
+	branch = prep-rel-0.5.0

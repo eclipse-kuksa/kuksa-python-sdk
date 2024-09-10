@@ -10,7 +10,7 @@ cd kuksa-client
 Hint: If you want to use another branch than master exchange the first command with
 
 ```console
-git submodule update --recursive --remote
+git submodule update --recursive --remote --init
 ```
 
 First we suggest you create a dedicated [python virtual environment](https://docs.python.org/3/library/venv.html) for kuksa-client:
