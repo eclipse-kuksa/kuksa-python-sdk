@@ -43,13 +43,7 @@ class BuildPackageProtosCommand(setuptools.Command):
 
     def run(self):
         from grpc_tools import command  # pylint: disable=import-outside-toplevel
-        for root, dirs, files in os.walk(PROTO_PATH):
-            for directory in dirs:
-                # Create an __init__.py file in each subdirectory
-                init_file = os.path.join(root, directory, "__init__.py")
-                with open(init_file, "w") as file:
-                    file.write("# This file marks the directory as a Python module")
-        shutil.copytree(PROTO_PATH, os.getcwd(), dirs_exist_ok=True)
+
         command.build_package_protos(".", strict_mode=True)
 
 
@@ -67,6 +61,13 @@ class SDistCommand(BuildPackageProtos, sdist.sdist):
 
 class DevelopCommand(BuildPackageProtos, _develop):
     def run(self):
+        for root, dirs, files in os.walk(PROTO_PATH):
+            for directory in dirs:
+                # Create an __init__.py file in each subdirectory
+                init_file = os.path.join(root, directory, "__init__.py")
+                with open(init_file, "w") as file:
+                    file.write("# This file marks the directory as a Python module")
+        shutil.copytree(PROTO_PATH, os.getcwd(), dirs_exist_ok=True)
         self.run_command("build_pb2")
         super().run()
 
