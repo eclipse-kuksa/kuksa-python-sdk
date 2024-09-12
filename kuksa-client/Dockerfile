@@ -20,7 +20,7 @@ COPY . /kuksa-python-sdk/
 WORKDIR /kuksa-python-sdk/kuksa-client
 RUN git submodule update --recursive --remote --init
 # install files from submodules to kuksa-client repo to generate protos out of it
-RUN pip install -r requirements.txt -e .
+RUN python3 -m proto
 
 RUN python3 -m build
 # We install globally on build container, so pyinstaller can easily gather all files
