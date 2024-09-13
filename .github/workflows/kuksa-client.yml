@@ -139,6 +139,8 @@ jobs:
       - name: Initiate submodules
         run: |
           git submodule update --init --recursive --remote
+          cd submodules/kuksa-databroker
+          git show-ref
       - name: Install dependencies with pip
         run: |
           cd kuksa-client
