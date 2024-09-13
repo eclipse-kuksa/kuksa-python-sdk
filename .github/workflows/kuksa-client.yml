@@ -132,13 +132,15 @@ jobs:
       - name: Checkout kuksa-python-sdk
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: 'true'
       - name: Install pip
         run: |
           python -m pip --quiet --no-input install --upgrade pip
       - name: Initiate submodules
         run: |
-          ls -R
+          cd submodules/kuksa-databroker
+          git fetch origin
+          cd ../..
           git submodule update --remote --recursive
       - name: Install dependencies with pip
         run: |
