@@ -138,9 +138,7 @@ jobs:
           python -m pip --quiet --no-input install --upgrade pip
       - name: Initiate submodules
         run: |
-          git submodule init
-          cd submodules/kuksa-databroker
-          git fetch origin
+          ls -R
           git submodule update --remote --recursive
       - name: Install dependencies with pip
         run: |
