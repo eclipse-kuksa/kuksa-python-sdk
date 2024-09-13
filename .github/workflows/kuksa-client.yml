@@ -138,8 +138,7 @@ jobs:
           python -m pip --quiet --no-input install --upgrade pip
       - name: Initiate submodules
         run: |
-          git submodule init
-          git submodule update --recursive --remote
+          git submodule update --init --recursive --remote
       - name: Install dependencies with pip
         run: |
           cd kuksa-client
