@@ -132,7 +132,7 @@ jobs:
       - name: Checkout kuksa-python-sdk
         uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          submodules: recursive
       - name: Install pip
         run: |
           python -m pip --quiet --no-input install --upgrade pip
