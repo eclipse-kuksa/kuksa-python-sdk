@@ -140,6 +140,7 @@ jobs:
         run: |
           cd submodules/kuksa-databroker
           git fetch origin
+          git show-ref
           cd ../..
           git submodule update --remote --recursive
       - name: Install dependencies with pip
