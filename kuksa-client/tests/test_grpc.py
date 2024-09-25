@@ -26,8 +26,17 @@ import grpc
 import grpc.aio
 import pytest
 
-from kuksa.val.v1 import val_pb2
-from kuksa.val.v1 import types_pb2
+from typing import Dict
+
+from kuksa.val.v1 import types_pb2 as types_v1
+
+from kuksa.val.v1 import val_pb2 as val_v1
+
+# from kuksa.val.v1 import val_pb2_grpc as val_grpc_v1
+from kuksa.val.v2 import types_pb2 as types_v2
+from kuksa.val.v2 import val_pb2 as val_v2
+
+# from kuksa.val.v2 import val_pb2_grpc as val_grpc_v2
 
 import kuksa_client.grpc
 from kuksa_client.grpc import Datapoint
@@ -71,10 +80,10 @@ class TestVSSClientError:
         assert client_error.errors == expected_client_error.errors
 
     def test_to_dict(self):
-        error = types_pb2.Error(
-            code=404, reason='not_found', message="Does.Not.Exist not found")
-        errors = (types_pb2.DataEntryError(
-            path='Does.Not.Exist', error=error),)
+        error = types_v1.Error(
+            code=404, reason="not_found", message="Does.Not.Exist not found"
+        )
+        errors = (types_v1.DataEntryError(path="Does.Not.Exist", error=error),)
         error = json_format.MessageToDict(
             error, preserving_proto_field_name=True)
         errors = [json_format.MessageToDict(
@@ -90,12 +99,14 @@ class TestVSSClientError:
 
 class TestMetadata:
     def test_to_message_empty(self):
-        assert Metadata().to_message() == types_pb2.Metadata()
+        assert Metadata().to_message() == types_v1.Metadata()
 
     def test_to_message_value_restriction_without_value_type(self):
         with pytest.raises(ValueError) as exc_info:
-            assert Metadata(value_restriction=ValueRestriction()
-                            ).to_message() == types_pb2.Metadata()
+            assert (
+                Metadata(value_restriction=ValueRestriction()).to_message()
+                == types_v1.Metadata()
+            )
         assert exc_info.value.args == (
             "Cannot set value_restriction from data type UNSPECIFIED",)
 
@@ -130,13 +141,16 @@ class TestMetadata:
             allowed_values = None
 
         if (min_value, max_value, allowed_values) == (None, None, None):
-            expected_message = types_pb2.Metadata()
+            expected_message = types_v1.Metadata()
             output_metadata = Metadata()
         else:
-            expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
-                signed=types_pb2.ValueRestrictionInt(
-                    min=min_value, max=max_value, allowed_values=allowed_values),
-            ))
+            expected_message = types_v1.Metadata(
+                value_restriction=types_v1.ValueRestriction(
+                    signed=types_v1.ValueRestrictionInt(
+                        min=min_value, max=max_value, allowed_values=allowed_values
+                    ),
+                )
+            )
             output_metadata = Metadata(value_restriction=ValueRestriction(
                                 min=min_value, max=max_value, allowed_values=allowed_values,
                                 ))
@@ -173,13 +187,16 @@ class TestMetadata:
             allowed_values = None
 
         if (min_value, max_value, allowed_values) == (None, None, None):
-            expected_message = types_pb2.Metadata()
+            expected_message = types_v1.Metadata()
             output_metadata = Metadata()
         else:
-            expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
-                unsigned=types_pb2.ValueRestrictionUint(
-                    min=min_value, max=max_value, allowed_values=allowed_values),
-            ))
+            expected_message = types_v1.Metadata(
+                value_restriction=types_v1.ValueRestriction(
+                    unsigned=types_v1.ValueRestrictionUint(
+                        min=min_value, max=max_value, allowed_values=allowed_values
+                    ),
+                )
+            )
             output_metadata = Metadata(value_restriction=ValueRestriction(
                                 min=min_value, max=max_value, allowed_values=allowed_values,
                                 ))
@@ -214,13 +231,16 @@ class TestMetadata:
             allowed_values = None
 
         if (min_value, max_value, allowed_values) == (None, None, None):
-            expected_message = types_pb2.Metadata()
+            expected_message = types_v1.Metadata()
             output_metadata = Metadata()
         else:
-            expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
-                floating_point=types_pb2.ValueRestrictionFloat(
-                    min=min_value, max=max_value, allowed_values=allowed_values),
-            ))
+            expected_message = types_v1.Metadata(
+                value_restriction=types_v1.ValueRestriction(
+                    floating_point=types_v1.ValueRestrictionFloat(
+                        min=min_value, max=max_value, allowed_values=allowed_values
+                    ),
+                )
+            )
             output_metadata = Metadata(value_restriction=ValueRestriction(
                                 min=min_value, max=max_value, allowed_values=allowed_values,
                                 ))
@@ -241,13 +261,16 @@ class TestMetadata:
             allowed_values = None
 
         if allowed_values is None:
-            expected_message = types_pb2.Metadata()
+            expected_message = types_v1.Metadata()
             output_metadata = Metadata()
         else:
-            expected_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
-                string=types_pb2.ValueRestrictionString(
-                    allowed_values=allowed_values),
-            ))
+            expected_message = types_v1.Metadata(
+                value_restriction=types_v1.ValueRestriction(
+                    string=types_v1.ValueRestrictionString(
+                        allowed_values=allowed_values
+                    ),
+                )
+            )
             output_metadata = Metadata(value_restriction=ValueRestriction(
                             allowed_values=allowed_values,
                             ))
@@ -260,7 +283,7 @@ class TestMetadata:
         This intends to cover the case when the proto message has a value restriction, but
         no contents (type not specified)
         """
-        input_message = types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction())
+        input_message = types_v1.Metadata(value_restriction=types_v1.ValueRestriction())
         expected_metadata = Metadata()
         assert Metadata.from_message(input_message) == expected_metadata
 
@@ -336,25 +359,78 @@ class TestMetadata:
 
 
 class TestDatapoint:
-    @pytest.mark.parametrize('value_type, init_args, message', [
-        (DataType.BOOLEAN, (None,), types_pb2.Datapoint()),
-        (DataType.BOOLEAN, ('False',), types_pb2.Datapoint(bool=False)),
-        (DataType.BOOLEAN, ('false',), types_pb2.Datapoint(bool=False)),
-        (DataType.BOOLEAN, ('F',), types_pb2.Datapoint(bool=False)),
-        (DataType.BOOLEAN, ('f',), types_pb2.Datapoint(bool=False)),
-        (DataType.BOOLEAN, (True, datetime.datetime(2022, 11, 16, tzinfo=datetime.timezone.utc)), types_pb2.Datapoint(
-            bool=True, timestamp=timestamp_pb2.Timestamp(seconds=1668556800),
-        )),
-        (DataType.INT8_ARRAY, ('[-128, 127]',), types_pb2.Datapoint(
-            int32_array=types_pb2.Int32Array(values=[-128, 127]))),
-    ])
-    def test_to_message(self, value_type, init_args, message):
-        assert Datapoint(*init_args).to_message(value_type) == message
+
+    @pytest.mark.parametrize(
+        "value_type, init_args, message_v1, message_v2",
+        [
+            (DataType.BOOLEAN, (None,), types_v1.Datapoint(), types_v2.Datapoint()),
+            (
+                DataType.BOOLEAN,
+                ("False",),
+                types_v1.Datapoint(bool=False),
+                types_v2.Datapoint(value=types_v2.Value(bool=False)),
+            ),
+            (
+                DataType.BOOLEAN,
+                ("false",),
+                types_v1.Datapoint(bool=False),
+                types_v2.Datapoint(value=types_v2.Value(bool=False)),
+            ),
+            (
+                DataType.BOOLEAN,
+                ("F",),
+                types_v1.Datapoint(bool=False),
+                types_v2.Datapoint(value=types_v2.Value(bool=False)),
+            ),
+            (
+                DataType.BOOLEAN,
+                ("f",),
+                types_v1.Datapoint(bool=False),
+                types_v2.Datapoint(value=types_v2.Value(bool=False)),
+            ),
+            (
+                DataType.BOOLEAN,
+                (True, datetime.datetime(2022, 11, 16, tzinfo=datetime.timezone.utc)),
+                types_v1.Datapoint(
+                    bool=True,
+                    timestamp=timestamp_pb2.Timestamp(seconds=1668556800),
+                ),
+                types_v2.Datapoint(
+                    value=types_v2.Value(bool=True),
+                    timestamp=timestamp_pb2.Timestamp(seconds=1668556800),
+                ),
+            ),
+            (
+                DataType.INT8_ARRAY,
+                ("[-128, 127]",),
+                types_v1.Datapoint(int32_array=types_v1.Int32Array(values=[-128, 127])),
+                types_v2.Datapoint(
+                    value=types_v2.Value(
+                        int32_array=types_v2.Int32Array(values=[-128, 127])
+                    ),
+                ),
+            ),
+        ],
+    )
+    def test_to_message(self, value_type, init_args, message_v1, message_v2):
+        assert Datapoint(*init_args).v1_to_message(value_type) == message_v1
+        assert Datapoint(*init_args).v2_to_message(value_type) == message_v2
 
     @pytest.mark.parametrize('value_type', [DataType.UNSPECIFIED, DataType.TIMESTAMP, DataType.TIMESTAMP_ARRAY])
-    def test_to_message_unsupported_value_type(self, value_type):
+    def test_v1_to_message_unsupported_value_type(self, value_type):
         with pytest.raises(ValueError) as exc_info:
-            Datapoint(42).to_message(value_type)
+            Datapoint(42).v1_to_message(value_type)
+        assert exc_info.value.args[0].startswith(
+            "Cannot determine which field to set with data type"
+        )
+
+    @pytest.mark.parametrize(
+        "value_type",
+        [DataType.UNSPECIFIED, DataType.TIMESTAMP, DataType.TIMESTAMP_ARRAY],
+    )
+    def test_v2_to_message_unsupported_value_type(self, value_type):
+        with pytest.raises(ValueError) as exc_info:
+            Datapoint(42).v2_to_message(value_type)
         assert exc_info.value.args[0].startswith(
             'Cannot determine which field to set with data type')
 
@@ -400,15 +476,19 @@ class TestEntryUpdate:
 
 @pytest.mark.asyncio
 class TestVSSClient:
-    @pytest.mark.usefixtures('secure_val_server')
-    async def test_secure_connection(self, unused_tcp_port, resources_path, val_servicer):
-        val_servicer.GetServerInfo.return_value = val_pb2.GetServerInfoResponse(
-            name='test_server', version='1.2.3')
+
+    @pytest.mark.usefixtures("secure_val_server")
+    async def test_secure_connection(
+        self, unused_tcp_port, resources_path, val_servicer_v1
+    ):
+        val_servicer_v1.GetServerInfo.return_value = val_v1.GetServerInfoResponse(
+            name="test_server", version="1.2.3"
+        )
         async with VSSClient('localhost', unused_tcp_port,
                              root_certificates=resources_path / 'test-ca.pem',
                              ensure_startup_connection=True
                              ):
-            assert val_servicer.GetServerInfo.call_count == 1
+            assert val_servicer_v1.GetServerInfo.call_count == 1
 
     async def test_get_current_values(self, mocker, unused_tcp_port):
         client = VSSClient('127.0.0.1', unused_tcp_port)
@@ -665,64 +745,85 @@ class TestVSSClient:
             'Vehicle.Chassis.Height': Metadata(entry_type=EntryType.ATTRIBUTE),
         }
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_get_some_entries(self, unused_tcp_port, val_servicer):
-        val_servicer.Get.return_value = val_pb2.GetResponse(entries=[
-            types_pb2.DataEntry(
-                path='Vehicle.Speed',
-                value=types_pb2.Datapoint(
-                    timestamp=timestamp_pb2.Timestamp(
-                        seconds=1667837915, nanos=247307674),
-                    float=42.0,
+    @pytest.mark.usefixtures("val_server")
+    async def test_get_some_entries(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            entries=[
+                types_v1.DataEntry(
+                    path="Vehicle.Speed",
+                    value=types_v1.Datapoint(
+                        timestamp=timestamp_pb2.Timestamp(
+                            seconds=1667837915, nanos=247307674
+                        ),
+                        float=42.0,
+                    ),
                 ),
-            ),
-            types_pb2.DataEntry(path='Vehicle.ADAS.ABS.IsActive',
-                                actuator_target=types_pb2.Datapoint(bool=True)),
-            types_pb2.DataEntry(
-                path='Vehicle.Chassis.Height',
-                metadata=types_pb2.Metadata(
-                    data_type=types_pb2.DATA_TYPE_UINT16,
-                    entry_type=types_pb2.ENTRY_TYPE_ATTRIBUTE,
-                    description="Overall vehicle height, in mm.",
-                    comment="No comment.",
-                    deprecation="V2.1 moved to Vehicle.Height",
-                    unit="mm",
+                types_v1.DataEntry(
+                    path="Vehicle.ADAS.ABS.IsActive",
+                    actuator_target=types_v1.Datapoint(bool=True),
                 ),
-            ),
-            types_pb2.DataEntry(
-                path='Vehicle.Chassis.Height', metadata=types_pb2.Metadata(data_type=types_pb2.DATA_TYPE_UINT16),
-            ),
-            types_pb2.DataEntry(
-                path='Vehicle.Chassis.Height', metadata=types_pb2.Metadata(entry_type=types_pb2.ENTRY_TYPE_ATTRIBUTE),
-            ),
-            types_pb2.DataEntry(
-                path='Vehicle.Chassis.Height',
-                metadata=types_pb2.Metadata(
-                    description="Overall vehicle height, in mm."),
-            ),
-            types_pb2.DataEntry(
-                path='Vehicle.Chassis.Height', metadata=types_pb2.Metadata(comment="No comment."),
-            ),
-            types_pb2.DataEntry(
-                path='Vehicle.Chassis.Height', metadata=types_pb2.Metadata(deprecation="V2.1 moved to Vehicle.Height"),
-            ),
-            types_pb2.DataEntry(path='Vehicle.Chassis.Height',
-                                metadata=types_pb2.Metadata(unit="mm")),
-            types_pb2.DataEntry(
-                path='Vehicle.CurrentLocation.Heading',
-                metadata=types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
-                    floating_point=types_pb2.ValueRestrictionFloat(
-                        min=0, max=360),
-                )),
-            ),
-            types_pb2.DataEntry(
-                path='Dummy.With.Allowed.Values',
-                metadata=types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
-                    signed=types_pb2.ValueRestrictionInt(
-                        allowed_values=[12, 42, 666]),
-                )),
-            ),
-        ])
+                types_v1.DataEntry(
+                    path="Vehicle.Chassis.Height",
+                    metadata=types_v1.Metadata(
+                        data_type=types_v1.DATA_TYPE_UINT16,
+                        entry_type=types_v1.ENTRY_TYPE_ATTRIBUTE,
+                        description="Overall vehicle height, in mm.",
+                        comment="No comment.",
+                        deprecation="V2.1 moved to Vehicle.Height",
+                        unit="mm",
+                    ),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.Chassis.Height",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_UINT16),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.Chassis.Height",
+                    metadata=types_v1.Metadata(
+                        entry_type=types_v1.ENTRY_TYPE_ATTRIBUTE
+                    ),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.Chassis.Height",
+                    metadata=types_v1.Metadata(
+                        description="Overall vehicle height, in mm."
+                    ),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.Chassis.Height",
+                    metadata=types_v1.Metadata(comment="No comment."),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.Chassis.Height",
+                    metadata=types_v1.Metadata(
+                        deprecation="V2.1 moved to Vehicle.Height"
+                    ),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.Chassis.Height", metadata=types_v1.Metadata(unit="mm")
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.CurrentLocation.Heading",
+                    metadata=types_v1.Metadata(
+                        value_restriction=types_v1.ValueRestriction(
+                            floating_point=types_v1.ValueRestrictionFloat(
+                                min=0, max=360
+                            ),
+                        )
+                    ),
+                ),
+                types_v1.DataEntry(
+                    path="Dummy.With.Allowed.Values",
+                    metadata=types_v1.Metadata(
+                        value_restriction=types_v1.ValueRestriction(
+                            signed=types_v1.ValueRestrictionInt(
+                                allowed_values=[12, 42, 666]
+                            ),
+                        )
+                    ),
+                ),
+            ]
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             entries = await client.get(entries=(entry for entry in (
                 # generator is intentional as get accepts Iterable
@@ -784,66 +885,74 @@ class TestVSSClient:
                         allowed_values=[12, 42, 666]),
                 )),
             ]
-            assert val_servicer.Get.call_args[0][0].entries == val_pb2.GetRequest(entries=(
-                val_pb2.EntryRequest(
-                    path='Vehicle.Speed', view=types_pb2.VIEW_CURRENT_VALUE, fields=(types_pb2.FIELD_VALUE,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.ADAS.ABS.IsActive',
-                    view=types_pb2.VIEW_TARGET_VALUE,
-                    fields=(types_pb2.FIELD_ACTUATOR_TARGET,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Chassis.Height',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Chassis.Height',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_DATA_TYPE,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Chassis.Height',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_DESCRIPTION,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Chassis.Height',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_ENTRY_TYPE,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Chassis.Height',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_COMMENT,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Chassis.Height',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_DEPRECATION,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Chassis.Height',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_UNIT,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.CurrentLocation.Heading',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_VALUE_RESTRICTION,),
-                ),
-                val_pb2.EntryRequest(
-                    path='Dummy.With.Allowed.Values',
-                    view=types_pb2.VIEW_METADATA,
-                    fields=(types_pb2.FIELD_METADATA_VALUE_RESTRICTION,),
-                ),
-            )).entries
+            assert (
+                val_servicer_v1.Get.call_args[0][0].entries
+                == val_v1.GetRequest(
+                    entries=(
+                        val_v1.EntryRequest(
+                            path="Vehicle.Speed",
+                            view=types_v1.VIEW_CURRENT_VALUE,
+                            fields=(types_v1.FIELD_VALUE,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.ADAS.ABS.IsActive",
+                            view=types_v1.VIEW_TARGET_VALUE,
+                            fields=(types_v1.FIELD_ACTUATOR_TARGET,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Chassis.Height",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Chassis.Height",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_DATA_TYPE,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Chassis.Height",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_DESCRIPTION,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Chassis.Height",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_ENTRY_TYPE,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Chassis.Height",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_COMMENT,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Chassis.Height",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_DEPRECATION,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Chassis.Height",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_UNIT,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.CurrentLocation.Heading",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_VALUE_RESTRICTION,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Dummy.With.Allowed.Values",
+                            view=types_v1.VIEW_METADATA,
+                            fields=(types_v1.FIELD_METADATA_VALUE_RESTRICTION,),
+                        ),
+                    )
+                ).entries
+            )
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_get_no_entries_requested(self, unused_tcp_port, val_servicer):
-        val_servicer.Get.side_effect = generate_error(
-            grpc.StatusCode.INVALID_ARGUMENT, 'No datapoints requested')
+    @pytest.mark.usefixtures("val_server")
+    async def test_get_no_entries_requested(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.Get.side_effect = generate_error(
+            grpc.StatusCode.INVALID_ARGUMENT, "No datapoints requested"
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             with pytest.raises(kuksa_client.grpc.VSSClientError) as exc_info:
                 await client.get(entries=[])
@@ -853,14 +962,16 @@ class TestVSSClient:
                 'reason': grpc.StatusCode.INVALID_ARGUMENT.value[1],
                 'message': 'No datapoints requested',
             }, errors=[]).args
-            assert val_servicer.Get.call_args[0][0] == val_pb2.GetRequest()
+            assert val_servicer_v1.Get.call_args[0][0] == val_v1.GetRequest()
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_get_unset_entries(self, unused_tcp_port, val_servicer):
-        val_servicer.Get.return_value = val_pb2.GetResponse(entries=[
-            types_pb2.DataEntry(path='Vehicle.Speed'),
-            types_pb2.DataEntry(path='Vehicle.ADAS.ABS.IsActive'),
-        ])
+    @pytest.mark.usefixtures("val_server")
+    async def test_get_unset_entries(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            entries=[
+                types_v1.DataEntry(path="Vehicle.Speed"),
+                types_v1.DataEntry(path="Vehicle.ADAS.ABS.IsActive"),
+            ]
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             entries = await client.get(entries=(
                 EntryRequest('Vehicle.Speed',
@@ -871,14 +982,15 @@ class TestVSSClient:
         assert entries == [DataEntry('Vehicle.Speed'), DataEntry(
             'Vehicle.ADAS.ABS.IsActive')]
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_get_nonexistent_entries(self, unused_tcp_port, val_servicer):
-        error = types_pb2.Error(
-            code=404, reason='not_found', message="Does.Not.Exist not found")
-        errors = (types_pb2.DataEntryError(
-            path='Does.Not.Exist', error=error),)
-        val_servicer.Get.return_value = val_pb2.GetResponse(
-            error=error, errors=errors)
+    @pytest.mark.usefixtures("val_server")
+    async def test_get_nonexistent_entries(self, unused_tcp_port, val_servicer_v1):
+        error = types_v1.Error(
+            code=404, reason="not_found", message="Does.Not.Exist not found"
+        )
+        errors = (types_v1.DataEntryError(path="Does.Not.Exist", error=error),)
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            error=error, errors=errors
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             with pytest.raises(VSSClientError):
                 await client.get(entries=(
@@ -886,134 +998,328 @@ class TestVSSClient:
                                  View.CURRENT_VALUE, (Field.VALUE,)),
                 ))
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_set_some_updates(self, unused_tcp_port, val_servicer):
-        val_servicer.Get.return_value = val_pb2.GetResponse(entries=(
-            types_pb2.DataEntry(
-                path='Vehicle.Speed', metadata=types_pb2.Metadata(data_type=types_pb2.DATA_TYPE_FLOAT),
-            ),
-            types_pb2.DataEntry(
-                path='Vehicle.ADAS.ABS.IsActive',
-                metadata=types_pb2.Metadata(
-                    data_type=types_pb2.DATA_TYPE_BOOLEAN),
-            ),
-            types_pb2.DataEntry(
-                path='Vehicle.Cabin.Door.Row1.Left.Shade.Position',
-                metadata=types_pb2.Metadata(
-                    data_type=types_pb2.DATA_TYPE_UINT8),
-            ),
-        ))
-        val_servicer.Set.return_value = val_pb2.SetResponse()
-        async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
-            await client.set(updates=[
-                EntryUpdate(DataEntry('Vehicle.Speed',
-                            value=Datapoint(value=42.0)), (Field.VALUE,)),
-                EntryUpdate(DataEntry(
-                    'Vehicle.ADAS.ABS.IsActive', actuator_target=Datapoint(value=False),
-                ), (Field.ACTUATOR_TARGET,)),
-                EntryUpdate(DataEntry('Vehicle.ADAS.CruiseControl.Error', metadata=Metadata(
-                    data_type=DataType.BOOLEAN,
-                    entry_type=EntryType.SENSOR,
-                    description="Indicates if cruise control system incurred and error condition.",
-                    comment="No comment",
-                    deprecation="Never to be deprecated",
-                    unit=None,
-                    value_restriction=None,
-                )), (Field.METADATA,)),
-                EntryUpdate(DataEntry('Vehicle.ADAS.CruiseControl.Error', metadata=Metadata(
-                    data_type=DataType.BOOLEAN,
-                )), (Field.METADATA_DATA_TYPE,)),
-                EntryUpdate(DataEntry('Vehicle.ADAS.CruiseControl.Error', metadata=Metadata(
-                    description="Indicates if cruise control system incurred and error condition.",
-                )), (Field.METADATA_DESCRIPTION,)),
-                EntryUpdate(DataEntry('Vehicle.ADAS.CruiseControl.Error', metadata=Metadata(
-                    entry_type=EntryType.SENSOR,
-                )), (Field.METADATA_ENTRY_TYPE,)),
-                EntryUpdate(DataEntry('Vehicle.ADAS.CruiseControl.Error', metadata=Metadata(
-                    comment="No comment",
-                )), (Field.METADATA_COMMENT,)),
-                EntryUpdate(DataEntry('Vehicle.ADAS.CruiseControl.Error', metadata=Metadata(
-                    deprecation="Never to be deprecated",
-                )), (Field.METADATA_DEPRECATION,)),
-                EntryUpdate(DataEntry('Vehicle.Cabin.Door.Row1.Left.Shade.Position', metadata=Metadata(
-                    unit='percent',
-                )), (Field.METADATA_UNIT,)),
-                EntryUpdate(DataEntry('Vehicle.Cabin.Door.Row1.Left.Shade.Position', metadata=Metadata(
-                    value_restriction=ValueRestriction(min=0, max=100),
-                )), (Field.METADATA_VALUE_RESTRICTION,)),
-            ])
-            assert val_servicer.Get.call_count == 1
-            assert val_servicer.Get.call_args[0][0].entries == val_pb2.GetRequest(entries=(
-                val_pb2.EntryRequest(path='Vehicle.Speed', view=View.METADATA, fields=(
-                    Field.METADATA_DATA_TYPE,)),
-                val_pb2.EntryRequest(
-                    path='Vehicle.ADAS.ABS.IsActive', view=View.METADATA, fields=(Field.METADATA_DATA_TYPE,),
+    @pytest.mark.usefixtures("val_server")
+    async def test_set_some_updates_v1(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            entries=(
+                types_v1.DataEntry(
+                    path="Vehicle.Speed",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_FLOAT),
                 ),
-                val_pb2.EntryRequest(
-                    path='Vehicle.Cabin.Door.Row1.Left.Shade.Position',
-                    view=View.METADATA,
-                    fields=(Field.METADATA_DATA_TYPE,),
+                types_v1.DataEntry(
+                    path="Vehicle.ADAS.ABS.IsActive",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_BOOLEAN),
                 ),
-            )).entries
-            assert val_servicer.Set.call_args[0][0].updates == val_pb2.SetRequest(updates=(
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.Speed', value=types_pb2.Datapoint(float=42.0),
-                ), fields=(types_pb2.FIELD_VALUE,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.ADAS.ABS.IsActive', actuator_target=types_pb2.Datapoint(bool=False),
-                ), fields=(types_pb2.FIELD_ACTUATOR_TARGET,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.ADAS.CruiseControl.Error',
-                    metadata=types_pb2.Metadata(
-                        data_type=types_pb2.DATA_TYPE_BOOLEAN,
-                        entry_type=types_pb2.ENTRY_TYPE_SENSOR,
-                        description="Indicates if cruise control system incurred and error condition.",
-                        comment="No comment",
-                        deprecation="Never to be deprecated",
+                types_v1.DataEntry(
+                    path="Vehicle.Cabin.Door.Row1.Left.Shade.Position",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_UINT8),
+                ),
+            )
+        )
+        val_servicer_v1.Set.return_value = val_v1.SetResponse()
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            await client.set(
+                updates=[
+                    EntryUpdate(
+                        DataEntry("Vehicle.Speed", value=Datapoint(value=42.0)),
+                        (Field.VALUE,),
                     ),
-                ), fields=(types_pb2.FIELD_METADATA,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.ADAS.CruiseControl.Error',
-                    metadata=types_pb2.Metadata(
-                        data_type=types_pb2.DATA_TYPE_BOOLEAN),
-                ), fields=(types_pb2.FIELD_METADATA_DATA_TYPE,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.ADAS.CruiseControl.Error',
-                    metadata=types_pb2.Metadata(
-                        description="Indicates if cruise control system incurred and error condition."
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.ADAS.ABS.IsActive",
+                            actuator_target=Datapoint(value=False),
+                        ),
+                        (Field.ACTUATOR_TARGET,),
                     ),
-                ), fields=(types_pb2.FIELD_METADATA_DESCRIPTION,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.ADAS.CruiseControl.Error',
-                    metadata=types_pb2.Metadata(
-                        entry_type=types_pb2.ENTRY_TYPE_SENSOR),
-                ), fields=(types_pb2.FIELD_METADATA_ENTRY_TYPE,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.ADAS.CruiseControl.Error',
-                    metadata=types_pb2.Metadata(comment="No comment"),
-                ), fields=(types_pb2.FIELD_METADATA_COMMENT,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.ADAS.CruiseControl.Error',
-                    metadata=types_pb2.Metadata(
-                        deprecation="Never to be deprecated"),
-                ), fields=(types_pb2.FIELD_METADATA_DEPRECATION,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.Cabin.Door.Row1.Left.Shade.Position',
-                    metadata=types_pb2.Metadata(unit="percent"),
-                ), fields=(types_pb2.FIELD_METADATA_UNIT,)),
-                val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                    path='Vehicle.Cabin.Door.Row1.Left.Shade.Position',
-                    metadata=types_pb2.Metadata(value_restriction=types_pb2.ValueRestriction(
-                        unsigned=types_pb2.ValueRestrictionUint(
-                            min=0, max=100),
-                    )),
-                ), fields=(types_pb2.FIELD_METADATA_VALUE_RESTRICTION,)),
-            )).updates
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.ADAS.CruiseControl.Error",
+                            metadata=Metadata(
+                                data_type=DataType.BOOLEAN,
+                                entry_type=EntryType.SENSOR,
+                                description="Indicates if cruise control system incurred and error condition.",
+                                comment="No comment",
+                                deprecation="Never to be deprecated",
+                                unit=None,
+                                value_restriction=None,
+                            ),
+                        ),
+                        (Field.METADATA,),
+                    ),
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.ADAS.CruiseControl.Error",
+                            metadata=Metadata(
+                                data_type=DataType.BOOLEAN,
+                            ),
+                        ),
+                        (Field.METADATA_DATA_TYPE,),
+                    ),
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.ADAS.CruiseControl.Error",
+                            metadata=Metadata(
+                                description="Indicates if cruise control system incurred and error condition.",
+                            ),
+                        ),
+                        (Field.METADATA_DESCRIPTION,),
+                    ),
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.ADAS.CruiseControl.Error",
+                            metadata=Metadata(
+                                entry_type=EntryType.SENSOR,
+                            ),
+                        ),
+                        (Field.METADATA_ENTRY_TYPE,),
+                    ),
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.ADAS.CruiseControl.Error",
+                            metadata=Metadata(
+                                comment="No comment",
+                            ),
+                        ),
+                        (Field.METADATA_COMMENT,),
+                    ),
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.ADAS.CruiseControl.Error",
+                            metadata=Metadata(
+                                deprecation="Never to be deprecated",
+                            ),
+                        ),
+                        (Field.METADATA_DEPRECATION,),
+                    ),
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.Cabin.Door.Row1.Left.Shade.Position",
+                            metadata=Metadata(
+                                unit="percent",
+                            ),
+                        ),
+                        (Field.METADATA_UNIT,),
+                    ),
+                    EntryUpdate(
+                        DataEntry(
+                            "Vehicle.Cabin.Door.Row1.Left.Shade.Position",
+                            metadata=Metadata(
+                                value_restriction=ValueRestriction(min=0, max=100),
+                            ),
+                        ),
+                        (Field.METADATA_VALUE_RESTRICTION,),
+                    ),
+                ]
+            )
+            assert val_servicer_v1.Get.call_count == 1
+            assert (
+                val_servicer_v1.Get.call_args[0][0].entries
+                == val_v1.GetRequest(
+                    entries=(
+                        val_v1.EntryRequest(
+                            path="Vehicle.Speed",
+                            view=View.METADATA,
+                            fields=(Field.METADATA_DATA_TYPE,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.ADAS.ABS.IsActive",
+                            view=View.METADATA,
+                            fields=(Field.METADATA_DATA_TYPE,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.Cabin.Door.Row1.Left.Shade.Position",
+                            view=View.METADATA,
+                            fields=(Field.METADATA_DATA_TYPE,),
+                        ),
+                    )
+                ).entries
+            )
+            assert (
+                val_servicer_v1.Set.call_args[0][0].updates
+                == val_v1.SetRequest(
+                    updates=(
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Speed",
+                                value=types_v1.Datapoint(float=42.0),
+                            ),
+                            fields=(types_v1.FIELD_VALUE,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.ABS.IsActive",
+                                actuator_target=types_v1.Datapoint(bool=False),
+                            ),
+                            fields=(types_v1.FIELD_ACTUATOR_TARGET,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.CruiseControl.Error",
+                                metadata=types_v1.Metadata(
+                                    data_type=types_v1.DATA_TYPE_BOOLEAN,
+                                    entry_type=types_v1.ENTRY_TYPE_SENSOR,
+                                    description="Indicates if cruise control system incurred and error condition.",
+                                    comment="No comment",
+                                    deprecation="Never to be deprecated",
+                                ),
+                            ),
+                            fields=(types_v1.FIELD_METADATA,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.CruiseControl.Error",
+                                metadata=types_v1.Metadata(
+                                    data_type=types_v1.DATA_TYPE_BOOLEAN
+                                ),
+                            ),
+                            fields=(types_v1.FIELD_METADATA_DATA_TYPE,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.CruiseControl.Error",
+                                metadata=types_v1.Metadata(
+                                    description="Indicates if cruise control system incurred and error condition."
+                                ),
+                            ),
+                            fields=(types_v1.FIELD_METADATA_DESCRIPTION,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.CruiseControl.Error",
+                                metadata=types_v1.Metadata(
+                                    entry_type=types_v1.ENTRY_TYPE_SENSOR
+                                ),
+                            ),
+                            fields=(types_v1.FIELD_METADATA_ENTRY_TYPE,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.CruiseControl.Error",
+                                metadata=types_v1.Metadata(comment="No comment"),
+                            ),
+                            fields=(types_v1.FIELD_METADATA_COMMENT,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.CruiseControl.Error",
+                                metadata=types_v1.Metadata(
+                                    deprecation="Never to be deprecated"
+                                ),
+                            ),
+                            fields=(types_v1.FIELD_METADATA_DEPRECATION,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Cabin.Door.Row1.Left.Shade.Position",
+                                metadata=types_v1.Metadata(unit="percent"),
+                            ),
+                            fields=(types_v1.FIELD_METADATA_UNIT,),
+                        ),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Cabin.Door.Row1.Left.Shade.Position",
+                                metadata=types_v1.Metadata(
+                                    value_restriction=types_v1.ValueRestriction(
+                                        unsigned=types_v1.ValueRestrictionUint(
+                                            min=0, max=100
+                                        ),
+                                    )
+                                ),
+                            ),
+                            fields=(types_v1.FIELD_METADATA_VALUE_RESTRICTION,),
+                        ),
+                    )
+                ).updates
+            )
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_set_no_updates_provided(self, unused_tcp_port, val_servicer):
-        val_servicer.Set.side_effect = generate_error(
-            grpc.StatusCode.INVALID_ARGUMENT, 'No datapoints requested')
+    @pytest.mark.usefixtures("val_server")
+    async def test_set_some_updates_v2(
+        self, unused_tcp_port, val_servicer_v2, val_servicer_v1
+    ):
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            entries=(
+                types_v1.DataEntry(
+                    path="Vehicle.Speed",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_FLOAT),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.ADAS.ABS.IsActive",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_BOOLEAN),
+                ),
+            )
+        )
+        val_servicer_v2.PublishValue.return_value = val_v2.PublishValueResponse()
+        _updates = [
+            EntryUpdate(
+                DataEntry("Vehicle.Speed", value=Datapoint(value=42.0)),
+                (Field.VALUE,),
+            ),
+            EntryUpdate(
+                DataEntry(
+                    "Vehicle.ADAS.ABS.IsActive",
+                    value=Datapoint(value=False),
+                ),
+                (Field.VALUE,),
+            ),
+        ]
+
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            await client.set(
+                updates=_updates,
+                v1=False,
+            )
+            assert val_servicer_v1.Get.call_count == 1
+            assert (
+                val_servicer_v1.Get.call_args[0][0].entries
+                == val_v1.GetRequest(
+                    entries=(
+                        val_v1.EntryRequest(
+                            path="Vehicle.Speed",
+                            view=View.METADATA,
+                            fields=(Field.METADATA_DATA_TYPE,),
+                        ),
+                        val_v1.EntryRequest(
+                            path="Vehicle.ADAS.ABS.IsActive",
+                            view=View.METADATA,
+                            fields=(Field.METADATA_DATA_TYPE,),
+                        ),
+                    )
+                ).entries
+            )
+
+            expected_requests = [
+                val_v2.PublishValueRequest(
+                    signal_id=types_v2.SignalID(path="Vehicle.Speed"),
+                    data_point=types_v2.Datapoint(value=types_v2.Value(float=42.0)),
+                ),
+                val_v2.PublishValueRequest(
+                    signal_id=types_v2.SignalID(path="Vehicle.ADAS.ABS.IsActive"),
+                    data_point=types_v2.Datapoint(value=types_v2.Value(bool=False)),
+                ),
+            ]
+
+            assert val_servicer_v2.PublishValue.call_count == len(_updates)
+
+            actual_requests = [
+                call[0][0] for call in val_servicer_v2.PublishValue.call_args_list
+            ]
+
+            for actual_request, expected_request in zip(
+                actual_requests, expected_requests
+            ):
+                assert actual_request == expected_request
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_set_no_updates_provided(
+        self, unused_tcp_port, val_servicer_v1, val_servicer_v2
+    ):
+        val_servicer_v1.Set.side_effect = generate_error(
+            grpc.StatusCode.INVALID_ARGUMENT, "No datapoints requested"
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             with pytest.raises(kuksa_client.grpc.VSSClientError) as exc_info:
                 await client.set(updates=[])
@@ -1023,44 +1329,133 @@ class TestVSSClient:
                 'reason': grpc.StatusCode.INVALID_ARGUMENT.value[1],
                 'message': 'No datapoints requested',
             }, errors=[]).args
-            assert val_servicer.Get.call_count == 0
-            assert val_servicer.Set.call_args[0][0].updates == val_pb2.SetRequest(
-            ).updates
+            assert val_servicer_v1.Get.call_count == 0
+            assert (
+                val_servicer_v1.Set.call_args[0][0].updates
+                == val_v1.SetRequest().updates
+            )
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            with pytest.raises(kuksa_client.grpc.VSSClientError) as exc_info:
+                await client.set(updates=[], v1=False)
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_set_nonexistent_entries(self, unused_tcp_port, val_servicer):
-        error = types_pb2.Error(
-            code=404, reason='not_found', message="Does.Not.Exist not found")
-        errors = (types_pb2.DataEntryError(
-            path='Does.Not.Exist', error=error),)
-        val_servicer.Get.return_value = val_pb2.GetResponse(
-            error=error, errors=errors)
-        val_servicer.Set.return_value = val_pb2.SetResponse(
-            error=error, errors=errors)
-        async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
+            assert (
+                exc_info.value.args
+                == kuksa_client.grpc.VSSClientError(
+                    error={
+                        "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
+                        "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
+                        "message": "No datapoints requested",
+                    },
+                    errors=[],
+                ).args
+            )
+            assert val_servicer_v1.Get.call_count == 0
+            assert val_servicer_v2.PublishValue.call_count == 0
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_set_nonexistent_entries_v1(self, unused_tcp_port, val_servicer_v1):
+        error = types_v1.Error(
+            code=404, reason="not_found", message="Does.Not.Exist not found"
+        )
+        errors = (types_v1.DataEntryError(path="Does.Not.Exist", error=error),)
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            error=error, errors=errors
+        )
+        val_servicer_v1.Set.return_value = val_v1.SetResponse(
+            error=error, errors=errors
+        )
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
             with pytest.raises(VSSClientError):
-                await client.set(updates=(
-                    EntryUpdate(DataEntry('Does.Not.Exist', value=Datapoint(value=42.0)), (Field.VALUE,)),),
+                await client.set(
+                    updates=(
+                        EntryUpdate(
+                            DataEntry("Does.Not.Exist", value=Datapoint(value=42.0)),
+                            (Field.VALUE,),
+                        ),
+                    ),
                 )
 
-            assert val_servicer.Get.call_count == 1
-            assert val_servicer.Set.call_count == 0
+            assert val_servicer_v1.Get.call_count == 1
+            assert val_servicer_v1.Set.call_count == 0
             with pytest.raises(VSSClientError):
-                await client.set(updates=(
-                    EntryUpdate(DataEntry(
-                        'Does.Not.Exist',
-                        value=Datapoint(value=42.0),
-                        metadata=Metadata(data_type=DataType.FLOAT),
-                    ), (Field.VALUE,)),),
+                await client.set(
+                    updates=(
+                        EntryUpdate(
+                            DataEntry(
+                                "Does.Not.Exist",
+                                value=Datapoint(value=42.0),
+                                metadata=Metadata(data_type=DataType.FLOAT),
+                            ),
+                            (Field.VALUE,),
+                        ),
+                    ),
                 )
 
-            assert val_servicer.Get.call_count == 1  # Get should'nt have been called again
-            assert val_servicer.Set.call_count == 1
+            assert (
+                val_servicer_v1.Get.call_count == 1
+            )  # Get should'nt have been called again
+            assert val_servicer_v1.Set.call_count == 1
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_authorize_successful(self, unused_tcp_port, val_servicer):
-        val_servicer.GetServerInfo.return_value = val_pb2.GetServerInfoResponse(
-            name='test_server', version='1.2.3')
+    @pytest.mark.usefixtures("val_server")
+    async def test_set_nonexistent_entries_v2(
+        self, unused_tcp_port, val_servicer_v2, val_servicer_v1
+    ):
+        error = types_v1.Error(
+            code=404, reason="not_found", message="Does.Not.Exist not found"
+        )
+        errors = (types_v1.DataEntryError(path="Does.Not.Exist", error=error),)
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            error=error, errors=errors
+        )
+        val_servicer_v2.PublishValue.side_effect = generate_error(
+            grpc.StatusCode.NOT_FOUND,
+            "Does.Not.Exist not found",
+        )
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            with pytest.raises(VSSClientError):
+                await client.set(
+                    updates=(
+                        EntryUpdate(
+                            DataEntry("Does.Not.Exist", value=Datapoint(value=42.0)),
+                            (Field.VALUE,),
+                        ),
+                    ),
+                    v1=False,
+                )
+
+            assert val_servicer_v1.Get.call_count == 1
+            assert val_servicer_v2.PublishValue.call_count == 0
+            with pytest.raises(VSSClientError):
+                await client.set(
+                    updates=(
+                        EntryUpdate(
+                            DataEntry(
+                                "Does.Not.Exist",
+                                value=Datapoint(value=42.0),
+                                metadata=Metadata(data_type=DataType.FLOAT),
+                            ),
+                            (Field.VALUE,),
+                        ),
+                    ),
+                    v1=False,
+                )
+
+            assert (
+                val_servicer_v1.Get.call_count == 1
+            )  # Get should'nt have been called again
+            assert val_servicer_v2.PublishValue.call_count == 1
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_authorize_successful(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.GetServerInfo.return_value = val_v1.GetServerInfoResponse(
+            name="test_server", version="1.2.3"
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             # token from kuksa.val directory under jwt/provide-vehicle-speed.token
             token = ('eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJsb2NhbCBkZXYiLCJpc3MiOiJjcmVhdGVUb2'
@@ -1091,123 +1486,354 @@ class TestVSSClient:
             assert client.authorization_header == bearer
             assert success == "Authenticated"
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_authorize_unsuccessful(self, unused_tcp_port, val_servicer):
-        val_servicer.GetServerInfo.side_effect = generate_error(
-            grpc.StatusCode.UNAUTHENTICATED, 'Invalid auth token: DecodeError(\"InvalidToken\")')
+    @pytest.mark.usefixtures("val_server")
+    async def test_authorize_unsuccessful(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.GetServerInfo.side_effect = generate_error(
+            grpc.StatusCode.UNAUTHENTICATED,
+            'Invalid auth token: DecodeError("InvalidToken")',
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             with pytest.raises(VSSClientError):
                 await client.authorize(token='')
             assert client.authorization_header is None
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_subscribe_some_entries(self, mocker, unused_tcp_port, val_servicer):
+    @pytest.mark.usefixtures("val_server")
+    async def test_subscribe_some_entries_v1(
+        self, mocker, unused_tcp_port, val_servicer_v1
+    ):
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             responses = (
                 # 1st response is subscription ack
-                val_pb2.SubscribeResponse(updates=[
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.Speed',
-                        value=types_pb2.Datapoint(
-                            timestamp=timestamp_pb2.Timestamp(
-                                seconds=1667837915, nanos=247307674),
-                            float=42.0,
+                val_v1.SubscribeResponse(
+                    updates=[
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Speed",
+                                value=types_v1.Datapoint(
+                                    timestamp=timestamp_pb2.Timestamp(
+                                        seconds=1667837915, nanos=247307674
+                                    ),
+                                    float=42.0,
+                                ),
+                            ),
+                            fields=(Field.VALUE,),
                         ),
-                    ), fields=(Field.VALUE,)),
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.ADAS.ABS.IsActive',
-                        actuator_target=types_pb2.Datapoint(bool=True),
-                    ), fields=(Field.ACTUATOR_TARGET,)),
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.Chassis.Height',
-                        metadata=types_pb2.Metadata(
-                            data_type=types_pb2.DATA_TYPE_UINT16,
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.ABS.IsActive",
+                                actuator_target=types_v1.Datapoint(bool=True),
+                            ),
+                            fields=(Field.ACTUATOR_TARGET,),
                         ),
-                    ), fields=(Field.METADATA_DATA_TYPE,)),
-                ]),
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Chassis.Height",
+                                metadata=types_v1.Metadata(
+                                    data_type=types_v1.DATA_TYPE_UINT16,
+                                ),
+                            ),
+                            fields=(Field.METADATA_DATA_TYPE,),
+                        ),
+                    ]
+                ),
                 # Remaining responses are actual events.
-                val_pb2.SubscribeResponse(updates=[
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.Speed',
-                        value=types_pb2.Datapoint(
-                            timestamp=timestamp_pb2.Timestamp(
-                                seconds=1667837912, nanos=247307674),
-                            float=43.0,
+                val_v1.SubscribeResponse(
+                    updates=[
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Speed",
+                                value=types_v1.Datapoint(
+                                    timestamp=timestamp_pb2.Timestamp(
+                                        seconds=1667837912, nanos=247307674
+                                    ),
+                                    float=43.0,
+                                ),
+                            ),
+                            fields=(Field.VALUE,),
                         ),
-                    ), fields=(Field.VALUE,)),
-                ]),
-                val_pb2.SubscribeResponse(updates=[
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.ADAS.ABS.IsActive',
-                        actuator_target=types_pb2.Datapoint(bool=False),
-                    ), fields=(Field.ACTUATOR_TARGET,)),
-                ]),
-                val_pb2.SubscribeResponse(updates=[
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.Chassis.Height',
-                        metadata=types_pb2.Metadata(
-                            data_type=types_pb2.DATA_TYPE_UINT8,
+                    ]
+                ),
+                val_v1.SubscribeResponse(
+                    updates=[
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.ADAS.ABS.IsActive",
+                                actuator_target=types_v1.Datapoint(bool=False),
+                            ),
+                            fields=(Field.ACTUATOR_TARGET,),
                         ),
-                    ), fields=(Field.METADATA_DATA_TYPE,)),
-                ]),
+                    ]
+                ),
+                val_v1.SubscribeResponse(
+                    updates=[
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Chassis.Height",
+                                metadata=types_v1.Metadata(
+                                    data_type=types_v1.DATA_TYPE_UINT8,
+                                ),
+                            ),
+                            fields=(Field.METADATA_DATA_TYPE,),
+                        ),
+                    ]
+                ),
             )
-            val_servicer.Subscribe.return_value = (
-                response for response in responses)
+            val_servicer_v1.Subscribe.return_value = (
+                response for response in responses
+            )
 
             actual_responses = []
-            async for updates in client.subscribe(entries=(entry for entry in (  # generator is intentional (Iterable)
-                EntryRequest('Vehicle.Speed',
-                             View.CURRENT_VALUE, (Field.VALUE,)),
-                EntryRequest('Vehicle.ADAS.ABS.IsActive',
-                             View.TARGET_VALUE, (Field.ACTUATOR_TARGET,)),
-                EntryRequest('Vehicle.Chassis.Height',
-                             View.METADATA, (Field.METADATA_DATA_TYPE,)),
-            ))):
+            async for updates in client.subscribe(
+                entries=(
+                    entry
+                    for entry in (  # generator is intentional (Iterable)
+                        EntryRequest(
+                            "Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)
+                        ),
+                        EntryRequest(
+                            "Vehicle.ADAS.ABS.IsActive",
+                            View.TARGET_VALUE,
+                            (Field.ACTUATOR_TARGET,),
+                        ),
+                        EntryRequest(
+                            "Vehicle.Chassis.Height",
+                            View.METADATA,
+                            (Field.METADATA_DATA_TYPE,),
+                        ),
+                    )
+                )
+            ):
                 actual_responses.append(updates)
 
             assert actual_responses == [
                 [
-                    EntryUpdate(entry=DataEntry(path='Vehicle.Speed', value=Datapoint(
-                        value=42.0,
-                        timestamp=datetime.datetime(
-                            2022, 11, 7, 16, 18, 35, 247307, tzinfo=datetime.timezone.utc),
-                    )), fields=[Field.VALUE]),
                     EntryUpdate(
                         entry=DataEntry(
-                            path='Vehicle.ADAS.ABS.IsActive', actuator_target=Datapoint(value=True)),
+                            path="Vehicle.Speed",
+                            value=Datapoint(
+                                value=42.0,
+                                timestamp=datetime.datetime(
+                                    2022,
+                                    11,
+                                    7,
+                                    16,
+                                    18,
+                                    35,
+                                    247307,
+                                    tzinfo=datetime.timezone.utc,
+                                ),
+                            ),
+                        ),
+                        fields=[Field.VALUE],
+                    ),
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.ADAS.ABS.IsActive",
+                            actuator_target=Datapoint(value=True),
+                        ),
                         fields=[Field.ACTUATOR_TARGET],
                     ),
-                    EntryUpdate(entry=DataEntry(path='Vehicle.Chassis.Height', metadata=Metadata(
-                        data_type=DataType.UINT16,
-                    )), fields=[Field.METADATA_DATA_TYPE])
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.Chassis.Height",
+                            metadata=Metadata(
+                                data_type=DataType.UINT16,
+                            ),
+                        ),
+                        fields=[Field.METADATA_DATA_TYPE],
+                    ),
                 ],
-                [EntryUpdate(entry=DataEntry(path='Vehicle.Speed', value=Datapoint(
-                    value=43.0,
-                    timestamp=datetime.datetime(
-                        2022, 11, 7, 16, 18, 32, 247307, tzinfo=datetime.timezone.utc),
-                )), fields=[Field.VALUE])],
-                [EntryUpdate(entry=DataEntry(path='Vehicle.ADAS.ABS.IsActive', actuator_target=Datapoint(
-                    value=False,
-                )), fields=[Field.ACTUATOR_TARGET])],
-                [EntryUpdate(entry=DataEntry(path='Vehicle.Chassis.Height', metadata=Metadata(
-                    data_type=DataType.UINT8,
-                )), fields=[Field.METADATA_DATA_TYPE])],
+                [
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.Speed",
+                            value=Datapoint(
+                                value=43.0,
+                                timestamp=datetime.datetime(
+                                    2022,
+                                    11,
+                                    7,
+                                    16,
+                                    18,
+                                    32,
+                                    247307,
+                                    tzinfo=datetime.timezone.utc,
+                                ),
+                            ),
+                        ),
+                        fields=[Field.VALUE],
+                    )
+                ],
+                [
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.ADAS.ABS.IsActive",
+                            actuator_target=Datapoint(
+                                value=False,
+                            ),
+                        ),
+                        fields=[Field.ACTUATOR_TARGET],
+                    )
+                ],
+                [
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.Chassis.Height",
+                            metadata=Metadata(
+                                data_type=DataType.UINT8,
+                            ),
+                        ),
+                        fields=[Field.METADATA_DATA_TYPE],
+                    )
+                ],
             ]
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_subscribe_no_entries_requested(self, mocker, unused_tcp_port, val_servicer):
-        val_servicer.Subscribe.side_effect = generate_error(
-            grpc.StatusCode.INVALID_ARGUMENT, 'Subscription request must contain at least one entry.',
+    @pytest.mark.usefixtures("val_server")
+    async def test_subscribe_some_entries_v2(
+        self, mocker, unused_tcp_port, val_servicer_v2
+    ):
+        _entries: Dict[str, types_v2.Datapoint] = {
+            "Vehicle.Speed": types_v2.Datapoint(
+                timestamp=timestamp_pb2.Timestamp(seconds=1667837915, nanos=247307674),
+                value=types_v2.Value(float=42.0),
+            ),
+            "Vehicle.ADAS.ABS.IsActive": types_v2.Datapoint(
+                value=types_v2.Value(bool=True)
+            ),
+        }
+        _entries_2: Dict[str, types_v2.Datapoint] = {
+            "Vehicle.Speed": types_v2.Datapoint(
+                timestamp=timestamp_pb2.Timestamp(seconds=1667837912, nanos=247307674),
+                value=types_v2.Value(float=43.0),
+            ),
+            "Vehicle.ADAS.ABS.IsActive": types_v2.Datapoint(
+                value=types_v2.Value(bool=False)
+            ),
+        }
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            responses = (
+                val_v2.SubscribeResponse(entries=_entries),
+                val_v2.SubscribeResponse(entries=_entries_2),
+            )
+            val_servicer_v2.Subscribe.return_value = (
+                response for response in responses
+            )
+
+            actual_responses = []
+            async for updates in client.subscribe(
+                entries=(
+                    entry
+                    for entry in (  # generator is intentional (Iterable)
+                        EntryRequest(
+                            "Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)
+                        ),
+                        EntryRequest(
+                            "Vehicle.ADAS.ABS.IsActive",
+                            View.CURRENT_VALUE,
+                            (Field.VALUE,),
+                        ),
+                    )
+                ),
+                v1=False,
+            ):
+                actual_responses.append(updates)
+
+            assert actual_responses == [
+                [
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.Speed",
+                            value=Datapoint(
+                                value=42.0,
+                                timestamp=datetime.datetime(
+                                    2022,
+                                    11,
+                                    7,
+                                    16,
+                                    18,
+                                    35,
+                                    247307,
+                                    tzinfo=datetime.timezone.utc,
+                                ),
+                            ),
+                        ),
+                        fields=[Field.VALUE],
+                    ),
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.ADAS.ABS.IsActive",
+                            value=Datapoint(value=True),
+                        ),
+                        fields=[Field.VALUE],
+                    ),
+                ],
+                [
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.Speed",
+                            value=Datapoint(
+                                value=43.0,
+                                timestamp=datetime.datetime(
+                                    2022,
+                                    11,
+                                    7,
+                                    16,
+                                    18,
+                                    32,
+                                    247307,
+                                    tzinfo=datetime.timezone.utc,
+                                ),
+                            ),
+                        ),
+                        fields=[Field.VALUE],
+                    ),
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.ADAS.ABS.IsActive",
+                            value=Datapoint(value=False),
+                        ),
+                        fields=[Field.VALUE],
+                    ),
+                ],
+            ]
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_subscribe_no_entries_requested(
+        self, mocker, unused_tcp_port, val_servicer_v1, val_servicer_v2
+    ):
+        val_servicer_v1.Subscribe.side_effect = generate_error(
+            grpc.StatusCode.INVALID_ARGUMENT,
+            "Subscription request must contain at least one entry.",
+        )
+        val_servicer_v2.Subscribe.side_effect = generate_error(
+            grpc.StatusCode.INVALID_ARGUMENT,
+            "Subscription request must contain at least one entry.",
         )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             with pytest.raises(VSSClientError):
                 async for _ in client.subscribe(entries=()):
                     pass
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_subscribe_nonexistent_entries(self, mocker, unused_tcp_port, val_servicer):
-        val_servicer.Subscribe.side_effect = generate_error(
-            grpc.StatusCode.INVALID_ARGUMENT, 'NotFound')
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            with pytest.raises(VSSClientError):
+                async for _ in client.subscribe(entries=(), v1=False):
+                    pass
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_subscribe_nonexistent_entries(
+        self, mocker, unused_tcp_port, val_servicer_v1, val_servicer_v2
+    ):
+        val_servicer_v1.Subscribe.side_effect = generate_error(
+            grpc.StatusCode.INVALID_ARGUMENT, "NotFound"
+        )
+        val_servicer_v2.Subscribe.side_effect = generate_error(
+            grpc.StatusCode.INVALID_ARGUMENT, "NotFound"
+        )
+
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             with pytest.raises(VSSClientError):
                 async for _ in client.subscribe(entries=(entry for entry in (  # generator is intentional (Iterable)
@@ -1216,19 +1842,38 @@ class TestVSSClient:
                 ))):
                     pass
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_get_server_info(self, unused_tcp_port, val_servicer):
-        val_servicer.GetServerInfo.return_value = val_pb2.GetServerInfoResponse(
-            name='test_server', version='1.2.3')
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            with pytest.raises(VSSClientError):
+                async for _ in client.subscribe(
+                    entries=(
+                        entry
+                        for entry in (  # generator is intentional (Iterable)
+                            EntryRequest(
+                                "Does.Not.Exist", View.CURRENT_VALUE, (Field.VALUE,)
+                            ),
+                        )
+                    ),
+                    v1=False,
+                ):
+                    pass
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_get_server_info(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.GetServerInfo.return_value = val_v1.GetServerInfoResponse(
+            name="test_server", version="1.2.3"
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             server_info = await client.get_server_info()
             assert server_info == ServerInfo(
                 name='test_server', version='1.2.3')
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_get_server_info_unavailable(self, unused_tcp_port, val_servicer):
-        val_servicer.GetServerInfo.side_effect = generate_error(
-            grpc.StatusCode.UNAVAILABLE, 'Unavailable')
+    @pytest.mark.usefixtures("val_server")
+    async def test_get_server_info_unavailable(self, unused_tcp_port, val_servicer_v1):
+        val_servicer_v1.GetServerInfo.side_effect = generate_error(
+            grpc.StatusCode.UNAVAILABLE, "Unavailable"
+        )
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             with pytest.raises(VSSClientError):
                 await client.get_server_info()
@@ -1236,80 +1881,127 @@ class TestVSSClient:
 
 @pytest.mark.asyncio
 class TestSubscriberManager:
-    @pytest.mark.usefixtures('val_server')
-    async def test_add_subscriber(self, mocker, unused_tcp_port, val_servicer):
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_add_subscriber_v1(self, mocker, unused_tcp_port, val_servicer_v1):
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             subscriber_manager = SubscriberManager(client)
             responses = (
                 # 1st response is subscription ack
-                val_pb2.SubscribeResponse(updates=[
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.Speed',
-                        value=types_pb2.Datapoint(
-                            timestamp=timestamp_pb2.Timestamp(
-                                seconds=1667837915, nanos=247307674),
-                            float=42.0,
+                val_v1.SubscribeResponse(
+                    updates=[
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Speed",
+                                value=types_v1.Datapoint(
+                                    timestamp=timestamp_pb2.Timestamp(
+                                        seconds=1667837915, nanos=247307674
+                                    ),
+                                    float=42.0,
+                                ),
+                            ),
+                            fields=(Field.VALUE,),
                         ),
-                    ), fields=(Field.VALUE,)),
-                ]),
+                    ]
+                ),
                 # Remaining responses are actual events that should invoke callback.
-                val_pb2.SubscribeResponse(updates=[
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.Speed',
-                        value=types_pb2.Datapoint(
-                            timestamp=timestamp_pb2.Timestamp(
-                                seconds=1667837912, nanos=247307674),
-                            float=43.0,
+                val_v1.SubscribeResponse(
+                    updates=[
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Speed",
+                                value=types_v1.Datapoint(
+                                    timestamp=timestamp_pb2.Timestamp(
+                                        seconds=1667837912, nanos=247307674
+                                    ),
+                                    float=43.0,
+                                ),
+                            ),
+                            fields=(Field.VALUE,),
                         ),
-                    ), fields=(Field.VALUE,)),
-                ]),
+                    ]
+                ),
             )
             callback = mocker.Mock()
-            val_servicer.Subscribe.return_value = (
-                response for response in responses)
+            val_servicer_v1.Subscribe.return_value = (
+                response for response in responses
+            )
 
-            subscribe_response_stream = client.subscribe(entries=(
-                EntryRequest('Vehicle.Speed',
-                             View.CURRENT_VALUE, (Field.VALUE,)),
-            ))
-            sub_uid = await subscriber_manager.add_subscriber(subscribe_response_stream, callback=callback)
+            subscribe_response_stream = client.subscribe(
+                entries=(
+                    EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
+                )
+            )
+            sub_uid = await subscriber_manager.add_subscriber(
+                subscribe_response_stream, callback=callback
+            )
 
             assert isinstance(sub_uid, uuid.UUID)
             while callback.call_count < 1:
                 await asyncio.sleep(0.01)
-            actual_updates = [list(call_args[0][0])
-                              for call_args in callback.call_args_list]
-            assert actual_updates == [
-                [EntryUpdate(entry=DataEntry(path='Vehicle.Speed', value=Datapoint(
-                    value=43.0,
-                    timestamp=datetime.datetime(
-                        2022, 11, 7, 16, 18, 32, 247307, tzinfo=datetime.timezone.utc),
-                )), fields=[Field.VALUE])],
+            actual_updates = [
+                list(call_args[0][0]) for call_args in callback.call_args_list
             ]
 
-    @pytest.mark.usefixtures('val_server')
-    async def test_remove_subscriber(self, mocker, unused_tcp_port, val_servicer):
-        async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
+            assert actual_updates == [
+                [
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.Speed",
+                            value=Datapoint(
+                                value=43.0,
+                                timestamp=datetime.datetime(
+                                    2022,
+                                    11,
+                                    7,
+                                    16,
+                                    18,
+                                    32,
+                                    247307,
+                                    tzinfo=datetime.timezone.utc,
+                                ),
+                            ),
+                        ),
+                        fields=[Field.VALUE],
+                    )
+                ],
+            ]
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_remove_subscriber_v1(self, mocker, unused_tcp_port, val_servicer_v1):
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
             subscriber_manager = SubscriberManager(client)
             responses = (
-                val_pb2.SubscribeResponse(updates=[
-                    val_pb2.EntryUpdate(entry=types_pb2.DataEntry(
-                        path='Vehicle.Speed',
-                        value=types_pb2.Datapoint(
-                            timestamp=timestamp_pb2.Timestamp(
-                                seconds=1667837915, nanos=247307674),
-                            float=42.0,
+                val_v1.SubscribeResponse(
+                    updates=[
+                        val_v1.EntryUpdate(
+                            entry=types_v1.DataEntry(
+                                path="Vehicle.Speed",
+                                value=types_v1.Datapoint(
+                                    timestamp=timestamp_pb2.Timestamp(
+                                        seconds=1667837915, nanos=247307674
+                                    ),
+                                    float=42.0,
+                                ),
+                            ),
+                            fields=(Field.VALUE,),
                         ),
-                    ), fields=(Field.VALUE,)),
-                ]),
+                    ]
+                ),
             )
-            val_servicer.Subscribe.return_value = (
-                response for response in responses)
-            subscribe_response_stream = client.subscribe(entries=(
-                EntryRequest('Vehicle.Speed',
-                             View.CURRENT_VALUE, (Field.VALUE,)),
-            ))
-            sub_uid = await subscriber_manager.add_subscriber(subscribe_response_stream, callback=mocker.Mock())
+            val_servicer_v1.Subscribe.return_value = (
+                response for response in responses
+            )
+            subscribe_response_stream = client.subscribe(
+                entries=(
+                    EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
+                )
+            )
+            sub_uid = await subscriber_manager.add_subscriber(
+                subscribe_response_stream, callback=mocker.Mock()
+            )
             subscriber = subscriber_manager.subscribers.get(sub_uid)
 
             await subscriber_manager.remove_subscriber(sub_uid)
@@ -1319,4 +2011,116 @@ class TestSubscriberManager:
 
             with pytest.raises(ValueError) as exc_info:
                 await subscriber_manager.remove_subscriber(sub_uid)
-            assert exc_info.value.args[0] == f"Could not find subscription {str(sub_uid)}"
+            assert (
+                exc_info.value.args[0] == f"Could not find subscription {str(sub_uid)}"
+            )
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_add_subscriber_v2(self, mocker, unused_tcp_port, val_servicer_v2):
+        _entries: Dict[str, types_v2.Datapoint] = {
+            "Vehicle.Speed": types_v2.Datapoint(
+                timestamp=timestamp_pb2.Timestamp(seconds=1667837915, nanos=247307674),
+                value=types_v2.Value(float=42.0),
+            ),
+        }
+        _entries_2: Dict[str, types_v2.Datapoint] = {
+            "Vehicle.Speed": types_v2.Datapoint(
+                timestamp=timestamp_pb2.Timestamp(seconds=1667837912, nanos=247307674),
+                value=types_v2.Value(float=43.0),
+            ),
+        }
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            subscriber_manager = SubscriberManager(client)
+            responses = (
+                # 1st response is subscription ack
+                val_v2.SubscribeResponse(entries=_entries),
+                # Remaining responses are actual events that should invoke callback.
+                val_v2.SubscribeResponse(entries=_entries_2),
+            )
+            callback = mocker.Mock()
+            val_servicer_v2.Subscribe.return_value = (
+                response for response in responses
+            )
+
+            subscribe_response_stream = client.subscribe(
+                entries=(
+                    EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
+                ),
+                v1=False,
+            )
+            sub_uid = await subscriber_manager.add_subscriber(
+                subscribe_response_stream, callback=callback
+            )
+
+            assert isinstance(sub_uid, uuid.UUID)
+            while callback.call_count < 1:
+                await asyncio.sleep(0.01)
+            actual_updates = [
+                list(call_args[0][0]) for call_args in callback.call_args_list
+            ]
+
+            assert actual_updates == [
+                [
+                    EntryUpdate(
+                        entry=DataEntry(
+                            path="Vehicle.Speed",
+                            value=Datapoint(
+                                value=43.0,
+                                timestamp=datetime.datetime(
+                                    2022,
+                                    11,
+                                    7,
+                                    16,
+                                    18,
+                                    32,
+                                    247307,
+                                    tzinfo=datetime.timezone.utc,
+                                ),
+                            ),
+                        ),
+                        fields=[Field.VALUE],
+                    )
+                ],
+            ]
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_remove_subscriber_v2(self, mocker, unused_tcp_port, val_servicer_v2):
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            subscriber_manager = SubscriberManager(client)
+            _entries: Dict[str, types_v2.Datapoint] = {
+                "Vehicle.Speed": types_v2.Datapoint(
+                    timestamp=timestamp_pb2.Timestamp(
+                        seconds=1667837915, nanos=247307674
+                    ),
+                    value=types_v2.Value(float=42.0),
+                ),
+            }
+            responses = (val_v2.SubscribeResponse(entries=_entries),)
+            val_servicer_v2.Subscribe.return_value = (
+                response for response in responses
+            )
+            subscribe_response_stream = client.subscribe(
+                entries=(
+                    EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
+                ),
+                v1=False,
+            )
+            sub_uid = await subscriber_manager.add_subscriber(
+                subscribe_response_stream, callback=mocker.Mock()
+            )
+            subscriber = subscriber_manager.subscribers.get(sub_uid)
+
+            await subscriber_manager.remove_subscriber(sub_uid)
+
+            assert subscriber_manager.subscribers.get(sub_uid) is None
+            assert subscriber.done()
+
+            with pytest.raises(ValueError) as exc_info:
+                await subscriber_manager.remove_subscriber(sub_uid)
+            assert (
+                exc_info.value.args[0] == f"Could not find subscription {str(sub_uid)}"
+            )

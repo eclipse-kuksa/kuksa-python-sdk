@@ -700,8 +700,16 @@ class EntryUpdate:
             field_descriptor, value = data[0]
             field_name = field_descriptor.name
             value = getattr(dp.value, field_name)
+            if dp.timestamp.seconds == 0 and dp.timestamp.nanos == 0:
+                timestamp = None
+            else:
+                timestamp = dp.timestamp.ToDatetime(
+                    tzinfo=datetime.timezone.utc,
+                )
             return cls(
-                entry=DataEntry(path=path, value=Datapoint(value)),
+                entry=DataEntry(
+                    path=path, value=Datapoint(value=value, timestamp=timestamp)
+                ),
                 fields=[Field(value=types_v1.FIELD_VALUE)],
             )
 
@@ -918,7 +926,6 @@ class VSSClient(BaseVSSClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.channel = None
-        self.channel2 = None
         self.exit_stack = contextlib.ExitStack()
 
     def __enter__(self):
@@ -952,20 +959,16 @@ class VSSClient(BaseVSSClient):
                 logger.info(f"Using TLS server name {self.tls_server_name}")
                 options = [("grpc.ssl_target_name_override", self.tls_server_name)]
                 channel = grpc.secure_channel(target_host, creds, options)
-                channel2 = grpc.secure_channel(target_host, creds, options)
             else:
                 logger.debug("Not providing explicit TLS server name")
                 channel = grpc.secure_channel(target_host, creds)
-                channel2 = grpc.secure_channel(target_host, creds)
         else:
             logger.info("Establishing insecure channel")
             channel = grpc.insecure_channel(target_host)
-            channel2 = grpc.insecure_channel(target_host)
 
         self.channel = self.exit_stack.enter_context(channel)
-        self.channel2 = self.exit_stack.enter_context(channel2)
         self.client_stub_v1 = val_grpc_v1.VALStub(self.channel)
-        self.client_stub_v2 = val_grpc_v2.VALStub(self.channel2)
+        self.client_stub_v2 = val_grpc_v2.VALStub(self.channel)
         self.connected = True
         if self.ensure_startup_connection:
             logger.debug("Connected to server: %s", self.get_server_info())
@@ -975,7 +978,6 @@ class VSSClient(BaseVSSClient):
         self.client_stub_v1 = None
         self.client_stub_v2 = None
         self.channel = None
-        self.channel2 = None
         self.connected = False
 
     @check_connected
@@ -1144,6 +1146,7 @@ class VSSClient(BaseVSSClient):
                 SubscribeEntry(path, View.CURRENT_VALUE, (Field.VALUE,))
                 for path in paths
             ),
+            v1=False,
             **rpc_kwargs,
         ):
             yield {update.entry.path: update.entry.value for update in updates}
@@ -1249,6 +1252,15 @@ class VSSClient(BaseVSSClient):
             self._process_set_response(resp)
         else:
             logger.info("Using v2")
+            if len(updates) == 0:
+                raise VSSClientError(
+                    error={
+                        "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
+                        "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
+                        "message": "No datapoints requested",
+                    },
+                    errors=[],
+                )
             for update in updates:
                 req = self._prepare_publish_value_request(
                     update, paths_with_required_type
@@ -1260,7 +1272,7 @@ class VSSClient(BaseVSSClient):
 
     @check_connected
     def subscribe(
-        self, entries: Iterable[SubscribeEntry], **rpc_kwargs
+        self, entries: Iterable[SubscribeEntry], v1: bool = True, **rpc_kwargs
     ) -> Iterator[List[EntryUpdate]]:
         """
         Parameters:
@@ -1271,14 +1283,28 @@ class VSSClient(BaseVSSClient):
         rpc_kwargs["metadata"] = self.generate_metadata_header(
             rpc_kwargs.get("metadata")
         )
-        req = self._prepare_subscribe_request(entries)
-        resp_stream = self.client_stub_v1.Subscribe(req, **rpc_kwargs)
-        try:
-            for resp in resp_stream:
-                logger.debug("%s: %s", type(resp).__name__, resp)
-                yield [EntryUpdate.from_message(update) for update in resp.updates]
-        except RpcError as exc:
-            raise VSSClientError.from_grpc_error(exc) from exc
+        if v1:
+            req = self._prepare_subscribe_request(entries)
+            resp_stream = self.client_stub_v1.Subscribe(req, **rpc_kwargs)
+            try:
+                for resp in resp_stream:
+                    logger.debug("%s: %s", type(resp).__name__, resp)
+                    yield [EntryUpdate.from_message(update) for update in resp.updates]
+            except RpcError as exc:
+                raise VSSClientError.from_grpc_error(exc) from exc
+        else:
+            logger.info("Using v2")
+            req = self._prepare_subscribev2_request(entries)
+            resp_stream = self.client_stub_v2.Subscribe(req, **rpc_kwargs)
+            try:
+                for resp in resp_stream:
+                    logger.debug("%s: %s", type(resp).__name__, resp)
+                    yield [
+                        EntryUpdate.from_tuple(path, dp)
+                        for path, dp in resp.entries.items()
+                    ]
+            except RpcError as exc:
+                raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
     def authorize(self, token: str, **rpc_kwargs) -> str:
