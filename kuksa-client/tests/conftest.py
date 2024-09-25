@@ -22,7 +22,8 @@ import grpc.aio
 import pytest
 import pytest_asyncio
 
-from kuksa.val.v1 import val_pb2_grpc
+from kuksa.val.v1 import val_pb2_grpc as val_v1
+from kuksa.val.v2 import val_pb2_grpc as val_v2
 
 import tests
 
@@ -32,22 +33,32 @@ def resources_path_fixture():
     return pathlib.Path(tests.__path__[0]) / 'resources'
 
 
-@pytest.fixture(name='val_servicer', scope='function')
-def val_servicer_fixture(mocker):
-    servicer = val_pb2_grpc.VALServicer()
-    mocker.patch.object(servicer, 'Get', spec=True)
-    mocker.patch.object(servicer, 'Set', spec=True)
-    mocker.patch.object(servicer, 'Subscribe', spec=True)
-    mocker.patch.object(servicer, 'GetServerInfo', spec=True)
+@pytest.fixture(name="val_servicer_v1", scope="function")
+def val_servicer_v1_fixture(mocker):
+    servicer_v1 = val_v1.VALServicer()
+    mocker.patch.object(servicer_v1, "Get", spec=True)
+    mocker.patch.object(servicer_v1, "Set", spec=True)
+    mocker.patch.object(servicer_v1, "Subscribe", spec=True)
+    mocker.patch.object(servicer_v1, "GetServerInfo", spec=True)
 
-    return servicer
+    return servicer_v1
 
 
-@pytest_asyncio.fixture(name='val_server', scope='function')
-async def val_server_fixture(unused_tcp_port, val_servicer):
+@pytest.fixture(name="val_servicer_v2", scope="function")
+def val_servicer_v2_fixture(mocker):
+    servicer_v2 = val_v2.VALServicer()
+    mocker.patch.object(servicer_v2, "PublishValue", spec=True)
+    mocker.patch.object(servicer_v2, "Subscribe", spec=True)
+
+    return servicer_v2
+
+
+@pytest_asyncio.fixture(name="val_server", scope="function")
+async def val_server_fixture(unused_tcp_port, val_servicer_v1, val_servicer_v2):
     server = grpc.aio.server()
-    val_pb2_grpc.add_VALServicer_to_server(val_servicer, server)
-    server.add_insecure_port(f'127.0.0.1:{unused_tcp_port}')
+    val_v1.add_VALServicer_to_server(val_servicer_v1, server)
+    val_v2.add_VALServicer_to_server(val_servicer_v2, server)
+    server.add_insecure_port(f"127.0.0.1:{unused_tcp_port}")
     await server.start()
     try:
         yield server
@@ -55,18 +66,26 @@ async def val_server_fixture(unused_tcp_port, val_servicer):
         await server.stop(grace=2.0)
 
 
-@pytest_asyncio.fixture(name='secure_val_server', scope='function')
-async def secure_val_server_fixture(unused_tcp_port, resources_path, val_servicer):
+@pytest_asyncio.fixture(name="secure_val_server", scope="function")
+async def secure_val_server_fixture(
+    unused_tcp_port, resources_path, val_servicer_v1, val_servicer_v2
+):
     server = grpc.aio.server()
-    val_pb2_grpc.add_VALServicer_to_server(val_servicer, server)
-    server.add_secure_port(f'localhost:{unused_tcp_port}', grpc.ssl_server_credentials(
-        private_key_certificate_chain_pairs=[(
-            (resources_path / 'test-server.key').read_bytes(),
-            (resources_path / 'test-server.pem').read_bytes(),
-        )],
-        root_certificates=(resources_path / 'test-ca.pem').read_bytes(),
-        require_client_auth=False,
-    ))
+    val_v1.add_VALServicer_to_server(val_servicer_v1, server)
+    val_v2.add_VALServicer_to_server(val_servicer_v2, server)
+    server.add_secure_port(
+        f"localhost:{unused_tcp_port}",
+        grpc.ssl_server_credentials(
+            private_key_certificate_chain_pairs=[
+                (
+                    (resources_path / "test-server.key").read_bytes(),
+                    (resources_path / "test-server.pem").read_bytes(),
+                )
+            ],
+            root_certificates=(resources_path / "test-ca.pem").read_bytes(),
+            require_client_auth=False,
+        ),
+    )
     await server.start()
     try:
         yield server

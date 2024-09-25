@@ -56,7 +56,6 @@ class VSSClient(BaseVSSClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.channel = None
-        self.channel2 = None
         self.exit_stack = contextlib.AsyncExitStack()
 
     async def __aenter__(self):
@@ -76,20 +75,16 @@ class VSSClient(BaseVSSClient):
                 logger.info(f"Using TLS server name {self.tls_server_name}")
                 options = [("grpc.ssl_target_name_override", self.tls_server_name)]
                 channel = grpc.aio.secure_channel(target_host, creds, options)
-                channel2 = grpc.aio.secure_channel(target_host, creds, options)
             else:
                 logger.debug("Not providing explicit TLS server name")
                 channel = grpc.aio.secure_channel(target_host, creds)
-                channel2 = grpc.aio.secure_channel(target_host, creds)
         else:
             logger.info("Establishing insecure channel")
             channel = grpc.aio.insecure_channel(target_host)
-            channel2 = grpc.aio.insecure_channel(target_host)
 
         self.channel = await self.exit_stack.enter_async_context(channel)
-        self.channel2 = await self.exit_stack.enter_async_context(channel2)
         self.client_stub_v1 = val_grpc_v1.VALStub(self.channel)
-        self.client_stub_v2 = val_grpc_v2.VALStub(self.channel2)
+        self.client_stub_v2 = val_grpc_v2.VALStub(self.channel)
         self.connected = True
         if self.ensure_startup_connection:
             logger.debug("Connected to server: %s", await self.get_server_info())
@@ -99,7 +94,6 @@ class VSSClient(BaseVSSClient):
         self.client_stub_v1 = None
         self.client_stub_v2 = None
         self.channel = None
-        self.channel2 = None
         self.connected = False
 
     def check_connected_async(func):
@@ -417,6 +411,15 @@ class VSSClient(BaseVSSClient):
             self._process_set_response(resp)
         else:
             logger.info("Using v2")
+            if len(updates) == 0:
+                raise VSSClientError(
+                    error={
+                        "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
+                        "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
+                        "message": "No datapoints requested",
+                    },
+                    errors=[],
+                )
             for update in updates:
                 req = self._prepare_publish_value_request(
                     update, paths_with_required_type
