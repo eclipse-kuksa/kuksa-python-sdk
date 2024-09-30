@@ -1268,7 +1268,10 @@ class VSSClient(BaseVSSClient):
                 try:
                     resp = self.client_stub_v2.PublishValueRequest(req, **rpc_kwargs)
                 except RpcError as exc:
-                    raise VSSClientError.from_grpc_error(exc) from exc
+                    if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
+                        self.set(updates)
+                    else:
+                        raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
     def subscribe(
@@ -1304,7 +1307,10 @@ class VSSClient(BaseVSSClient):
                         for path, dp in resp.entries.items()
                     ]
             except RpcError as exc:
-                raise VSSClientError.from_grpc_error(exc) from exc
+                if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
+                    self.subscribe(entries)
+                else:
+                    raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
     def authorize(self, token: str, **rpc_kwargs) -> str:

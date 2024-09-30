@@ -427,7 +427,10 @@ class VSSClient(BaseVSSClient):
                 try:
                     resp = await self.client_stub_v2.PublishValue(req, **rpc_kwargs)
                 except AioRpcError as exc:
-                    raise VSSClientError.from_grpc_error(exc) from exc
+                    if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
+                        await self.set(updates)
+                    else:
+                        raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected_async_iter
     async def subscribe(
@@ -466,7 +469,10 @@ class VSSClient(BaseVSSClient):
                         for path, dp in resp.entries.items()
                     ]
             except AioRpcError as exc:
-                raise VSSClientError.from_grpc_error(exc) from exc
+                if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
+                    await self.subscribe(entries)
+                else:
+                    raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected_async
     async def authorize(self, token: str, **rpc_kwargs) -> str:
