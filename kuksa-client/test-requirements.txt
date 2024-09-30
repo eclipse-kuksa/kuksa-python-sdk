@@ -18,9 +18,9 @@ dill==0.3.8
     # via pylint
 exceptiongroup==1.2.1
     # via pytest
-grpcio==1.66.1
+grpcio==1.66.2
     # via grpcio-tools
-grpcio-tools==1.66.1
+grpcio-tools==1.66.2
     # via kuksa_client (setup.cfg)
 iniconfig==2.0.0
     # via pytest
