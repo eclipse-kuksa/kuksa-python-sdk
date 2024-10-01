@@ -690,28 +690,24 @@ class EntryUpdate:
 
     @classmethod
     def from_tuple(cls, path: str, dp: types_v2.Datapoint):
-        if dp.failure:
-            print(f"An error for {path} occurred: {dp.failure}")
-            return cls(None)
+        # we assume here that only one field of Value is set -> we use the first entry.
+        # This should always be the case.
+        data = dp.value.ListFields()
+        field_descriptor, value = data[0]
+        field_name = field_descriptor.name
+        value = getattr(dp.value, field_name)
+        if dp.timestamp.seconds == 0 and dp.timestamp.nanos == 0:
+            timestamp = None
         else:
-            # we assume here that only one field of Value is set -> we use the first entry.
-            # This should always be the case.
-            data = dp.value.ListFields()
-            field_descriptor, value = data[0]
-            field_name = field_descriptor.name
-            value = getattr(dp.value, field_name)
-            if dp.timestamp.seconds == 0 and dp.timestamp.nanos == 0:
-                timestamp = None
-            else:
-                timestamp = dp.timestamp.ToDatetime(
-                    tzinfo=datetime.timezone.utc,
-                )
-            return cls(
-                entry=DataEntry(
-                    path=path, value=Datapoint(value=value, timestamp=timestamp)
-                ),
-                fields=[Field(value=types_v1.FIELD_VALUE)],
+            timestamp = dp.timestamp.ToDatetime(
+                tzinfo=datetime.timezone.utc,
             )
+        return cls(
+            entry=DataEntry(
+                path=path, value=Datapoint(value=value, timestamp=timestamp)
+            ),
+            fields=[Field(value=types_v1.FIELD_VALUE)],
+        )
 
     def to_message(self) -> val_v1.EntryUpdate:
         message = val_v1.EntryUpdate(entry=self.entry.to_message())
