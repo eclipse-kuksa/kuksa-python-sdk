@@ -138,7 +138,7 @@ class Backend(cli_backend.Backend):
         if attribute in self.AttrDict:
             field, _ = self.AttrDict[attribute]
             entry_updates = []
-            v1 = True
+            try_v2 = False
             for path, value in updates.items():
 
                 if field is kuksa_client.grpc.Field.VALUE:
@@ -146,7 +146,7 @@ class Backend(cli_backend.Backend):
                         path=path,
                         value=kuksa_client.grpc.Datapoint(value=value),
                     )
-                    v1 = False
+                    try_v2 = True
                 elif field is kuksa_client.grpc.Field.ACTUATOR_TARGET:
                     entry = kuksa_client.grpc.DataEntry(
                         path=path,
@@ -164,7 +164,7 @@ class Backend(cli_backend.Backend):
                 entry_updates.append(
                     kuksa_client.grpc.EntryUpdate(entry=entry, fields=(field,))
                 )
-            requestArgs = {"updates": entry_updates, "v1": v1}
+            requestArgs = {"updates": entry_updates, "try_v2": try_v2}
             return self._sendReceiveMsg(("set", requestArgs), timeout)
         return json.dumps({"error": "Invalid Attribute"})
 
@@ -197,7 +197,7 @@ class Backend(cli_backend.Backend):
             ]
             requestArgs = {
                 "entries": entries,
-                "v1": False,
+                "try_v2": True,
                 "callback": callback_wrapper(callback),
             }
             return self._sendReceiveMsg(("subscribe", requestArgs), timeout)
