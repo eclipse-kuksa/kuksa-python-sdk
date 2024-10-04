@@ -1270,7 +1270,7 @@ class TestVSSClient:
         ) as client:
             await client.set(
                 updates=_updates,
-                v1=False,
+                try_v2=True,
             )
             assert val_servicer_v1.Get.call_count == 1
             assert (
@@ -1338,7 +1338,7 @@ class TestVSSClient:
             "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
         ) as client:
             with pytest.raises(kuksa_client.grpc.VSSClientError) as exc_info:
-                await client.set(updates=[], v1=False)
+                await client.set(updates=[], try_v2=True)
 
             assert (
                 exc_info.value.args
@@ -1426,7 +1426,7 @@ class TestVSSClient:
                             (Field.VALUE,),
                         ),
                     ),
-                    v1=False,
+                    try_v2=True,
                 )
 
             assert val_servicer_v1.Get.call_count == 1
@@ -1443,7 +1443,7 @@ class TestVSSClient:
                             (Field.VALUE,),
                         ),
                     ),
-                    v1=False,
+                    try_v2=True,
                 )
 
             assert (
@@ -1736,7 +1736,7 @@ class TestVSSClient:
                         ),
                     )
                 ),
-                v1=False,
+                try_v2=True,
             ):
                 actual_responses.append(updates)
 
@@ -1820,7 +1820,7 @@ class TestVSSClient:
             "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
         ) as client:
             with pytest.raises(VSSClientError):
-                async for _ in client.subscribe(entries=(), v1=False):
+                async for _ in client.subscribe(entries=(), try_v2=True):
                     pass
 
     @pytest.mark.usefixtures("val_server")
@@ -1855,7 +1855,7 @@ class TestVSSClient:
                             ),
                         )
                     ),
-                    v1=False,
+                    try_v2=True,
                 ):
                     pass
 
@@ -2048,7 +2048,7 @@ class TestSubscriberManager:
                 entries=(
                     EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
                 ),
-                v1=False,
+                try_v2=True,
             )
             sub_uid = await subscriber_manager.add_subscriber(
                 subscribe_response_stream, callback=callback
@@ -2107,7 +2107,7 @@ class TestSubscriberManager:
                 entries=(
                     EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
                 ),
-                v1=False,
+                try_v2=True,
             )
             sub_uid = await subscriber_manager.add_subscriber(
                 subscribe_response_stream, callback=mocker.Mock()
