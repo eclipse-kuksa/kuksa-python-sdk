@@ -143,9 +143,10 @@ jobs:
       - name: Install dependencies with pip
         run: |
           cd kuksa-client
-          python3 -m proto
-          pip install -r requirements.txt -e .
+          pip install -r requirements.txt
           pip install -r test-requirements.txt
+          python3 -m proto
+          pip install -e .
       - name: Run tests
         run: |
           cd kuksa-client
