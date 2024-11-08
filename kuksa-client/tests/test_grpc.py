@@ -1314,6 +1314,51 @@ class TestVSSClient:
                 assert actual_request == expected_request
 
     @pytest.mark.usefixtures("val_server")
+    async def test_set_some_updates_v2_target(
+        self, unused_tcp_port, val_servicer_v2, val_servicer_v1
+    ):
+        """
+        Similar test to above, but trying to update target values using v2
+        which is not allowed
+        """
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            entries=(
+                types_v1.DataEntry(
+                    path="Vehicle.Speed",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_FLOAT),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.ADAS.ABS.IsActive",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_BOOLEAN),
+                ),
+            )
+        )
+        _updates = [
+            EntryUpdate(
+                DataEntry("Vehicle.Speed", value=Datapoint(value=42.0)),
+                (Field.ACTUATOR_TARGET,),
+            ),
+            EntryUpdate(
+                DataEntry(
+                    "Vehicle.ADAS.ABS.IsActive",
+                    value=Datapoint(value=False),
+                ),
+                (Field.ACTUATOR_TARGET,),
+            ),
+        ]
+
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            with pytest.raises(VSSClientError):
+                await client.set(
+                    updates=_updates,
+                    try_v2=True,
+                )
+            assert val_servicer_v1.Get.call_count == 1
+            assert val_servicer_v2.PublishValue.call_count == 0
+
+    @pytest.mark.usefixtures("val_server")
     async def test_set_no_updates_provided(
         self, unused_tcp_port, val_servicer_v1, val_servicer_v2
     ):
@@ -1588,16 +1633,17 @@ class TestVSSClient:
                     entry
                     for entry in (  # generator is intentional (Iterable)
                         EntryRequest(
-                            "Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)
+                            # View is ignored, so we can provide any value
+                            "Vehicle.Speed", View.FIELDS, (Field.VALUE,)
                         ),
                         EntryRequest(
                             "Vehicle.ADAS.ABS.IsActive",
-                            View.TARGET_VALUE,
+                            View.UNSPECIFIED,
                             (Field.ACTUATOR_TARGET,),
                         ),
                         EntryRequest(
                             "Vehicle.Chassis.Height",
-                            View.METADATA,
+                            View.UNSPECIFIED,
                             (Field.METADATA_DATA_TYPE,),
                         ),
                     )
@@ -1731,7 +1777,8 @@ class TestVSSClient:
                         ),
                         EntryRequest(
                             "Vehicle.ADAS.ABS.IsActive",
-                            View.CURRENT_VALUE,
+                            # Specified View is ignored so we can use anyone :-)
+                            View.METADATA,
                             (Field.VALUE,),
                         ),
                     )
@@ -1798,6 +1845,39 @@ class TestVSSClient:
                     ),
                 ],
             ]
+
+    @pytest.mark.usefixtures("val_server")
+    async def test_subscribe_some_entries_v2_target(
+        self, mocker, unused_tcp_port, val_servicer_v2
+    ):
+        """
+        Similar to above but trying to subscribe to target values which is not possible using v2
+        """
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            actual_responses = []
+
+            with pytest.raises(VSSClientError):
+                async for updates in client.subscribe(
+                    entries=(
+                        entry
+                        for entry in (  # generator is intentional (Iterable)
+                            EntryRequest(
+                                "Vehicle.Speed", View.TARGET_VALUE, (Field.ACTUATOR_TARGET,)
+                            ),
+                            EntryRequest(
+                                "Vehicle.ADAS.ABS.IsActive",
+                                View.TARGET_VALUE,
+                                (Field.ACTUATOR_TARGET,),
+                            ),
+                        )
+                    ),
+                    try_v2=True,
+                ):
+                    actual_responses.append(updates)
+
+            assert not actual_responses
 
     @pytest.mark.usefixtures("val_server")
     async def test_subscribe_no_entries_requested(

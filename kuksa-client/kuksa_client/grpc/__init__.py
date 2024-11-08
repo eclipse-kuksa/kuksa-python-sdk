@@ -830,6 +830,18 @@ class BaseVSSClient:
         value_type = paths_with_required_type.get(update.entry.path)
         if value_type is not None:
             update.entry.value_type = value_type
+
+        for field in update.fields:
+            if field != Field.VALUE:
+                raise VSSClientError(
+                    error={
+                        "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
+                        "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
+                        "message": "Cannot use v2 to publish fields other than value",
+                    },
+                    errors=[],
+                )
+
         req = val_v2.PublishValueRequest(
             signal_id=types_v2.SignalID(path=update.entry.path),
             data_point=update.entry.value.v2_to_message(update.entry.value_type),
@@ -863,6 +875,18 @@ class BaseVSSClient:
         paths = []
         for entry in entries:
             paths.append(entry.path)
+
+            for field in entry.fields:
+                if field != Field.VALUE:
+                    raise VSSClientError(
+                        error={
+                            "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
+                            "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
+                            "message": "Cannot use v2 if specifiying fields other than value",
+                        },
+                        errors=[],
+                    )
+
         req = val_v2.SubscribeRequest(signal_paths=paths)
         logger.debug("%s: %s", type(req).__name__, req)
         return req
@@ -1220,7 +1244,7 @@ class VSSClient(BaseVSSClient):
 
     @check_connected
     def set(
-        self, updates: Collection[EntryUpdate], try_v2: bool = True, **rpc_kwargs
+        self, updates: Collection[EntryUpdate], try_v2: bool = False, **rpc_kwargs
     ) -> None:
         """
         Parameters:
@@ -1273,7 +1297,7 @@ class VSSClient(BaseVSSClient):
 
     @check_connected
     def subscribe(
-        self, entries: Iterable[SubscribeEntry], try_v2: bool = True, **rpc_kwargs
+        self, entries: Iterable[SubscribeEntry], try_v2: bool = False, **rpc_kwargs
     ) -> Iterator[List[EntryUpdate]]:
         """
         Parameters:
