@@ -10,9 +10,9 @@ cmd2==1.5.0
     # via kuksa_client (setup.cfg)
 colorama==0.4.6
     # via cmd2
-grpcio==1.67.1
+grpcio==1.68.0
     # via grpcio-tools
-grpcio-tools==1.67.1
+grpcio-tools==1.68.0
     # via kuksa_client (setup.cfg)
 jsonpath-ng==1.7.0
     # via kuksa_client (setup.cfg)
@@ -26,7 +26,7 @@ pyperclip==1.9.0
     # via cmd2
 wcwidth==0.2.13
     # via cmd2
-websockets==13.1
+websockets==14.1
     # via kuksa_client (setup.cfg)
 
 # The following packages are considered to be unsafe in a requirements file:
