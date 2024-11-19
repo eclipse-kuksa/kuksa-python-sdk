@@ -12,15 +12,15 @@ cmd2==1.5.0
     # via kuksa_client (setup.cfg)
 colorama==0.4.6
     # via cmd2
-coverage[toml]==7.6.4
+coverage[toml]==7.6.7
     # via pytest-cov
 dill==0.3.9
     # via pylint
 exceptiongroup==1.2.2
     # via pytest
-grpcio==1.67.1
+grpcio==1.68.0
     # via grpcio-tools
-grpcio-tools==1.67.1
+grpcio-tools==1.68.0
     # via kuksa_client (setup.cfg)
 iniconfig==2.0.0
     # via pytest
@@ -30,7 +30,7 @@ jsonpath-ng==1.7.0
     # via kuksa_client (setup.cfg)
 mccabe==0.7.0
     # via pylint
-packaging==24.1
+packaging==24.2
     # via pytest
 platformdirs==4.3.6
     # via pylint
@@ -61,7 +61,7 @@ pytest-mock==3.14.0
     # via kuksa_client (setup.cfg)
 pytest-timeout==2.3.1
     # via kuksa_client (setup.cfg)
-tomli==2.0.2
+tomli==2.1.0
     # via
     #   coverage
     #   pylint
@@ -72,7 +72,7 @@ typing-extensions==4.12.2
     # via astroid
 wcwidth==0.2.13
     # via cmd2
-websockets==13.1
+websockets==14.1
     # via kuksa_client (setup.cfg)
 
 # The following packages are considered to be unsafe in a requirements file:
