@@ -16,9 +16,6 @@ name: kuksa_client
 on:
   push:
   pull_request:
-    paths:
-    - ".github/workflows/kuksa-client.yml"
-    - "kuksa-client/**"
   workflow_dispatch:
 
 concurrency:
