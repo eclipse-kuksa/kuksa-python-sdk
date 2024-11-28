@@ -477,7 +477,7 @@ class TestEntryUpdate:
 @pytest.mark.asyncio
 class TestVSSClient:
 
-    @pytest.mark.usefixtures("secure_val_server")
+    @pytest.mark.usefixtures("secure_mocked_databroker")
     async def test_secure_connection(
         self, unused_tcp_port, resources_path, val_servicer_v1
     ):
@@ -745,7 +745,7 @@ class TestVSSClient:
             'Vehicle.Chassis.Height': Metadata(entry_type=EntryType.ATTRIBUTE),
         }
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_get_some_entries(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.Get.return_value = val_v1.GetResponse(
             entries=[
@@ -948,7 +948,7 @@ class TestVSSClient:
                 ).entries
             )
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_get_no_entries_requested(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.Get.side_effect = generate_error(
             grpc.StatusCode.INVALID_ARGUMENT, "No datapoints requested"
@@ -964,7 +964,7 @@ class TestVSSClient:
             }, errors=[]).args
             assert val_servicer_v1.Get.call_args[0][0] == val_v1.GetRequest()
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_get_unset_entries(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.Get.return_value = val_v1.GetResponse(
             entries=[
@@ -982,7 +982,7 @@ class TestVSSClient:
         assert entries == [DataEntry('Vehicle.Speed'), DataEntry(
             'Vehicle.ADAS.ABS.IsActive')]
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_get_nonexistent_entries(self, unused_tcp_port, val_servicer_v1):
         error = types_v1.Error(
             code=404, reason="not_found", message="Does.Not.Exist not found"
@@ -998,7 +998,7 @@ class TestVSSClient:
                                  View.CURRENT_VALUE, (Field.VALUE,)),
                 ))
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_set_some_updates_v1(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.Get.return_value = val_v1.GetResponse(
             entries=(
@@ -1234,7 +1234,7 @@ class TestVSSClient:
                 ).updates
             )
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_set_some_updates_v2(
         self, unused_tcp_port, val_servicer_v2, val_servicer_v1
     ):
@@ -1313,7 +1313,52 @@ class TestVSSClient:
             ):
                 assert actual_request == expected_request
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
+    async def test_set_some_updates_v2_target(
+        self, unused_tcp_port, val_servicer_v2, val_servicer_v1
+    ):
+        """
+        Similar test to above, but trying to update target values using v2
+        which is not allowed
+        """
+        val_servicer_v1.Get.return_value = val_v1.GetResponse(
+            entries=(
+                types_v1.DataEntry(
+                    path="Vehicle.Speed",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_FLOAT),
+                ),
+                types_v1.DataEntry(
+                    path="Vehicle.ADAS.ABS.IsActive",
+                    metadata=types_v1.Metadata(data_type=types_v1.DATA_TYPE_BOOLEAN),
+                ),
+            )
+        )
+        _updates = [
+            EntryUpdate(
+                DataEntry("Vehicle.Speed", value=Datapoint(value=42.0)),
+                (Field.ACTUATOR_TARGET,),
+            ),
+            EntryUpdate(
+                DataEntry(
+                    "Vehicle.ADAS.ABS.IsActive",
+                    value=Datapoint(value=False),
+                ),
+                (Field.ACTUATOR_TARGET,),
+            ),
+        ]
+
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            with pytest.raises(VSSClientError):
+                await client.set(
+                    updates=_updates,
+                    try_v2=True,
+                )
+            assert val_servicer_v1.Get.call_count == 1
+            assert val_servicer_v2.PublishValue.call_count == 0
+
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_set_no_updates_provided(
         self, unused_tcp_port, val_servicer_v1, val_servicer_v2
     ):
@@ -1354,7 +1399,7 @@ class TestVSSClient:
             assert val_servicer_v1.Get.call_count == 0
             assert val_servicer_v2.PublishValue.call_count == 0
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_set_nonexistent_entries_v1(self, unused_tcp_port, val_servicer_v1):
         error = types_v1.Error(
             code=404, reason="not_found", message="Does.Not.Exist not found"
@@ -1400,7 +1445,7 @@ class TestVSSClient:
             )  # Get should'nt have been called again
             assert val_servicer_v1.Set.call_count == 1
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_set_nonexistent_entries_v2(
         self, unused_tcp_port, val_servicer_v2, val_servicer_v1
     ):
@@ -1451,7 +1496,7 @@ class TestVSSClient:
             )  # Get should'nt have been called again
             assert val_servicer_v2.PublishValue.call_count == 1
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_authorize_successful(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.GetServerInfo.return_value = val_v1.GetServerInfoResponse(
             name="test_server", version="1.2.3"
@@ -1486,7 +1531,7 @@ class TestVSSClient:
             assert client.authorization_header == bearer
             assert success == "Authenticated"
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_authorize_unsuccessful(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.GetServerInfo.side_effect = generate_error(
             grpc.StatusCode.UNAUTHENTICATED,
@@ -1497,7 +1542,7 @@ class TestVSSClient:
                 await client.authorize(token='')
             assert client.authorization_header is None
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_subscribe_some_entries_v1(
         self, mocker, unused_tcp_port, val_servicer_v1
     ):
@@ -1588,16 +1633,17 @@ class TestVSSClient:
                     entry
                     for entry in (  # generator is intentional (Iterable)
                         EntryRequest(
-                            "Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)
+                            # View is ignored, so we can provide any value
+                            "Vehicle.Speed", View.FIELDS, (Field.VALUE,)
                         ),
                         EntryRequest(
                             "Vehicle.ADAS.ABS.IsActive",
-                            View.TARGET_VALUE,
+                            View.UNSPECIFIED,
                             (Field.ACTUATOR_TARGET,),
                         ),
                         EntryRequest(
                             "Vehicle.Chassis.Height",
-                            View.METADATA,
+                            View.UNSPECIFIED,
                             (Field.METADATA_DATA_TYPE,),
                         ),
                     )
@@ -1688,7 +1734,7 @@ class TestVSSClient:
                 ],
             ]
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_subscribe_some_entries_v2(
         self, mocker, unused_tcp_port, val_servicer_v2
     ):
@@ -1731,7 +1777,8 @@ class TestVSSClient:
                         ),
                         EntryRequest(
                             "Vehicle.ADAS.ABS.IsActive",
-                            View.CURRENT_VALUE,
+                            # Specified View is ignored so we can use anyone :-)
+                            View.METADATA,
                             (Field.VALUE,),
                         ),
                     )
@@ -1799,7 +1846,40 @@ class TestVSSClient:
                 ],
             ]
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
+    async def test_subscribe_some_entries_v2_target(
+        self, mocker, unused_tcp_port, val_servicer_v2
+    ):
+        """
+        Similar to above but trying to subscribe to target values which is not possible using v2
+        """
+        async with VSSClient(
+            "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
+        ) as client:
+            actual_responses = []
+
+            with pytest.raises(VSSClientError):
+                async for updates in client.subscribe(
+                    entries=(
+                        entry
+                        for entry in (  # generator is intentional (Iterable)
+                            EntryRequest(
+                                "Vehicle.Speed", View.TARGET_VALUE, (Field.ACTUATOR_TARGET,)
+                            ),
+                            EntryRequest(
+                                "Vehicle.ADAS.ABS.IsActive",
+                                View.TARGET_VALUE,
+                                (Field.ACTUATOR_TARGET,),
+                            ),
+                        )
+                    ),
+                    try_v2=True,
+                ):
+                    actual_responses.append(updates)
+
+            assert not actual_responses
+
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_subscribe_no_entries_requested(
         self, mocker, unused_tcp_port, val_servicer_v1, val_servicer_v2
     ):
@@ -1823,7 +1903,7 @@ class TestVSSClient:
                 async for _ in client.subscribe(entries=(), try_v2=True):
                     pass
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_subscribe_nonexistent_entries(
         self, mocker, unused_tcp_port, val_servicer_v1, val_servicer_v2
     ):
@@ -1859,7 +1939,7 @@ class TestVSSClient:
                 ):
                     pass
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_get_server_info(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.GetServerInfo.return_value = val_v1.GetServerInfoResponse(
             name="test_server", version="1.2.3"
@@ -1869,7 +1949,7 @@ class TestVSSClient:
             assert server_info == ServerInfo(
                 name='test_server', version='1.2.3')
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_get_server_info_unavailable(self, unused_tcp_port, val_servicer_v1):
         val_servicer_v1.GetServerInfo.side_effect = generate_error(
             grpc.StatusCode.UNAVAILABLE, "Unavailable"
@@ -1882,7 +1962,7 @@ class TestVSSClient:
 @pytest.mark.asyncio
 class TestSubscriberManager:
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_add_subscriber_v1(self, mocker, unused_tcp_port, val_servicer_v1):
         async with VSSClient('127.0.0.1', unused_tcp_port, ensure_startup_connection=False) as client:
             subscriber_manager = SubscriberManager(client)
@@ -1967,7 +2047,7 @@ class TestSubscriberManager:
                 ],
             ]
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_remove_subscriber_v1(self, mocker, unused_tcp_port, val_servicer_v1):
         async with VSSClient(
             "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
@@ -2015,7 +2095,7 @@ class TestSubscriberManager:
                 exc_info.value.args[0] == f"Could not find subscription {str(sub_uid)}"
             )
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_add_subscriber_v2(self, mocker, unused_tcp_port, val_servicer_v2):
         _entries: Dict[str, types_v2.Datapoint] = {
             "Vehicle.Speed": types_v2.Datapoint(
@@ -2085,7 +2165,7 @@ class TestSubscriberManager:
                 ],
             ]
 
-    @pytest.mark.usefixtures("val_server")
+    @pytest.mark.usefixtures("mocked_databroker")
     async def test_remove_subscriber_v2(self, mocker, unused_tcp_port, val_servicer_v2):
         async with VSSClient(
             "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
