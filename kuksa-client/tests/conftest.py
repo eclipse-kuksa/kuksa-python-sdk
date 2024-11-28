@@ -53,7 +53,7 @@ def val_servicer_v2_fixture(mocker):
     return servicer_v2
 
 
-@pytest_asyncio.fixture(name="val_server", scope="function")
+@pytest_asyncio.fixture(name="mocked_databroker", scope="function")
 async def val_server_fixture(unused_tcp_port, val_servicer_v1, val_servicer_v2):
     server = grpc.aio.server()
     val_v1.add_VALServicer_to_server(val_servicer_v1, server)
@@ -66,7 +66,7 @@ async def val_server_fixture(unused_tcp_port, val_servicer_v1, val_servicer_v2):
         await server.stop(grace=2.0)
 
 
-@pytest_asyncio.fixture(name="secure_val_server", scope="function")
+@pytest_asyncio.fixture(name="secure_mocked_databroker", scope="function")
 async def secure_val_server_fixture(
     unused_tcp_port, resources_path, val_servicer_v1, val_servicer_v2
 ):
