@@ -1,7 +1,7 @@
 [build-system]
 requires = [
-    # Make sure to use the same version criteria in pyproject.toml and update requirements.txt after changing
-    "grpcio-tools~=1.68",
+    # Make sure to use the same exact version criteria in setup.cfg and update requirements.txt after changing
+    "grpcio-tools==1.68.0",
     "setuptools>=42",
     "setuptools-git-versioning",
     "wheel",
