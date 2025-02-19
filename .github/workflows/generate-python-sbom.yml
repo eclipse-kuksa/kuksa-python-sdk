@@ -1,0 +1,80 @@
+name: Generate and upload SBOM into sbom.eclipse.org
+
+on:
+  push:
+    branches: 
+      - "main"
+    paths:
+      - "kuksa-client/pyproject.toml"
+      - "kuksa-client/requirements.txt"
+    tags:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        default: 'main'
+        required: true
+
+
+env:
+  PYTHON_VERSION: '3.12'
+  PRODUCT_PATH: './kuksa-client'
+  PLUGIN_VERSION: '5.1.1'
+
+permissions:
+  contents: read
+
+jobs:
+  generate-sbom:
+    runs-on: ubuntu-latest
+    outputs:
+      project-version: ${{ steps.version.outputs.PROJECT_VERSION }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.version }}
+
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install cyclonedx-py
+        run: pipx install cyclonedx-bom==${{ env.PLUGIN_VERSION }}
+
+      - name: Extract product version
+        id: version
+        run: |
+          # Triggered by tag push
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          # Triggered by push to deps files
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            VERSION="latest"
+          # Manual trigger
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "PROJECT_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Product version: $VERSION"
+
+      - name: Generate sbom
+        run: cyclonedx-py requirements ${{ env.PRODUCT_PATH }}/requirements.txt -o bom.json
+
+      - name: Upload sbom
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: sbom
+          path: bom.json
+
+  store-sbom-data: # stores sbom and metadata in a predefined format for otterdog to pick up
+    needs: ['generate-sbom']
+    uses: eclipse-csi/workflows/.github/workflows/store-sbom-data.yml@main
+    with:
+      projectName: 'kuksa-python-sdk'
+      projectVersion: ${{ needs.generate-sbom.outputs.project-version }}
+      bomArtifact: 'sbom'
+      bomFilename: 'bom.json'
+      parentProject: 'ec1518ae-819b-41fa-a266-b94c3212aaef'
