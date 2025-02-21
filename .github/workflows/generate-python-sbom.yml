@@ -2,7 +2,7 @@ name: Generate and upload SBOM into sbom.eclipse.org
 
 on:
   push:
-    branches: 
+    branches:
       - "main"
     paths:
       - "kuksa-client/pyproject.toml"
@@ -15,7 +15,6 @@ on:
         description: 'Version'
         default: 'main'
         required: true
-
 
 env:
   PYTHON_VERSION: '3.12'
