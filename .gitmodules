@@ -1,6 +1,5 @@
 
 
-[submodule "kuksa-databroker"]
-	path = submodules/kuksa-databroker
-	url = https://github.com/eclipse-kuksa/kuksa-databroker.git
-	branch = feature/databroker-api-v2
+[submodule "submodules/kuksa-proto"]
+	path = submodules/kuksa-proto
+	url = https://github.com/eclipse-kuksa/kuksa-proto.git

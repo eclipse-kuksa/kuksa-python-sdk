@@ -15,7 +15,7 @@ import shutil
 import os
 
 # this needs to be adapted once the submodules name or structure changes
-PROTO_PATH = os.path.abspath("../submodules/kuksa-databroker/proto")
+PROTO_PATH = os.path.abspath("../submodules/kuksa-proto/proto/")
 
 
 def main():
