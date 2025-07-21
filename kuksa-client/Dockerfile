@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir dist/*.whl
 WORKDIR /
 RUN rm -rf dist
 # Letting pyinstaller collect everything that is required
-RUN pyinstaller --collect-data kuksa_client --clean  -s  /usr/local/bin/kuksa-client
+RUN pyinstaller --collect-data kuksa_client --add-data=/kuksa-python-sdk/kuksa-client/kuksa:kuksa --add-data=/kuksa-python-sdk/kuksa-client/sdv:sdv --clean  -s  /usr/local/bin/kuksa-client
 
 
 # Debian 12 is bookworm, so the glibc version matches. Distroless is a lot smaller than
