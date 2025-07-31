@@ -141,7 +141,8 @@ jobs:
         run: |
           cd kuksa-client
           pip install -r requirements.txt -r test-requirements.txt
-          python3 -m proto
+          python3 -m prototagandcopy
+          python3 -m protobuild
           pip install -e .
       - name: Run tests
         run: |
