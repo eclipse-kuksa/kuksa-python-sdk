@@ -9,7 +9,7 @@
 # Note: This dockerfile needs to be executed one level above in the root folder
 
 
-FROM python:3.10-slim-bookworm as build
+FROM python:3.10-slim-bookworm AS build
 # binutils is required by pyinstaller to strip any .so libs that are collected
 # git is used to determine & embed version information during build time
 RUN apt update && apt -yy install binutils git
