@@ -18,7 +18,7 @@ jsonpath-ng==1.7.0
     # via kuksa_client (setup.cfg)
 ply==3.11
     # via jsonpath-ng
-protobuf==5.28.3
+protobuf==5.29.5
     # via grpcio-tools
 pygments==2.18.0
     # via kuksa_client (setup.cfg)
