@@ -9,7 +9,7 @@
 # Note: This dockerfile needs to be executed one level above in the root folder
 
 
-FROM python:3.10-slim-bookworm as build
+FROM python:3.10-slim-bookworm AS build
 # binutils is required by pyinstaller to strip any .so libs that are collected
 # git is used to determine & embed version information during build time
 RUN apt update && apt -yy install binutils git
@@ -19,8 +19,6 @@ RUN pip install --upgrade pip build pyinstaller
 COPY . /kuksa-python-sdk/
 WORKDIR /kuksa-python-sdk/kuksa-client
 RUN git submodule update --recursive --remote --init
-# install files from submodules to kuksa-client repo to generate protos out of it
-RUN python3 -m proto
 
 RUN python3 -m build
 # We install globally on build container, so pyinstaller can easily gather all files
@@ -29,7 +27,7 @@ RUN pip install --no-cache-dir dist/*.whl
 WORKDIR /
 RUN rm -rf dist
 # Letting pyinstaller collect everything that is required
-RUN pyinstaller --collect-data kuksa_client --clean  -s  /usr/local/bin/kuksa-client
+RUN pyinstaller --collect-data kuksa_client --add-data=/kuksa-python-sdk/kuksa-client/kuksa:kuksa --add-data=/kuksa-python-sdk/kuksa-client/sdv:sdv --clean  -s  /usr/local/bin/kuksa-client
 
 
 # Debian 12 is bookworm, so the glibc version matches. Distroless is a lot smaller than

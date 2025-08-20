@@ -1,2 +1,6 @@
 include  *.py
+recursive-include kuksa *.py
+recursive-include sdv *.py
 global-exclude *.pyc
+global-exclude protobuild.py
+global-exclude prototagandcopy.py

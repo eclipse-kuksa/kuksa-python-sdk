@@ -19,6 +19,10 @@ PROTO_PATH = os.path.abspath("../submodules/kuksa-proto/proto/")
 
 
 def main():
+    '''
+    This will tag all proto folders as Python packages by creating an __init__.py file
+    in each subdirectory and then copy the proto files to the current working directory
+    '''
     for root, dirs, files in os.walk(PROTO_PATH):
         for directory in dirs:
             # Create an __init__.py file in each subdirectory

@@ -21,11 +21,19 @@ python3 -m venv ~/.venv/kuksa-client
 source ~/.venv/kuksa-client/bin/activate  # Run this every time you want to activate kuksa-client's virtual environment
 ```
 
-To use the right api interfaces of databroker run the following:
+To use the right api interfaces of databroker run the following
+
 ```console
-python3 -m proto
+python3 -m prototagandcopy
 ```
+
 This should copy the corresponding proto files to the kuksa-client directory.
+
+You still might need to compile the proto files, to do so do
+
+```console
+python3 -m protobuild
+```
 
 Your prompt should change to somehting indicating you are in the virutal environment now, e.g.
 
