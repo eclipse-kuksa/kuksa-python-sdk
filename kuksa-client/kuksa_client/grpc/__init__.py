@@ -1279,7 +1279,7 @@ class VSSClient(BaseVSSClient):
                     update, paths_with_required_type
                 )
                 try:
-                    resp = self.client_stub_v2.PublishValueRequest(req, **rpc_kwargs)
+                    resp = self.client_stub_v2.PublishValue(req, **rpc_kwargs)
                 except RpcError as exc:
                     if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
                         logger.debug("v2 not available fall back to v1 instead")
