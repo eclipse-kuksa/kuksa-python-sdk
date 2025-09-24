@@ -1359,7 +1359,7 @@ class VSSClient(BaseVSSClient):
                     if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
                         logger.debug("v2 not available - skip querying ids")
                         return
-                    raise VSSClientError.from_grpc_error(exc) from exc  
+                    raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
     def subscribe(
@@ -1376,7 +1376,8 @@ class VSSClient(BaseVSSClient):
                 error={
                     "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
                     "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
-                    "message": "Method subscribe supports v1, only. Use v2_subscribe or v2_subscribe_batch_actuation instead.",
+                    "message": ("Method subscribe supports v1, only. "
+                                "Use v2_subscribe or v2_subscribe_batch_actuation instead."),
                 },
                 errors=[],
             )
