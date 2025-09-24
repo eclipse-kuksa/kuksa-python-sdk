@@ -690,8 +690,8 @@ class EntryUpdate:
 
     @classmethod
     def from_tuple(cls, path: str, dp: types_v2.Datapoint):
-        # we assume here that only one field of Value is set -> we use the first entry.
-        # This should always be the case.
+        # we assume here that at max one field of Value is set -> we use the first entry.
+        # If no field is set the value is currently unknown/not avaialable -> set to None.
         data = dp.value.ListFields()
         if data:
             field_descriptor, value = data[0]
@@ -710,6 +710,21 @@ class EntryUpdate:
                 path=path, value=Datapoint(value=value, timestamp=timestamp)
             ),
             fields=[Field(value=types_v1.FIELD_VALUE)],
+        )
+
+    @classmethod
+    def from_actuate_value(cls, path: str, value: types_v2.Value):
+        # we assume here that exactly one field of Value is set -> we use the first entry.
+        # This should always be the case.
+        data = value.ListFields()
+        field_descriptor, target_value = data[0]
+        field_name = field_descriptor.name
+        target_value = getattr(value, field_name)
+        return cls(
+            entry=DataEntry(
+                path=path, actuator_target=Datapoint(value=target_value)
+            ),
+            fields=[Field(value=types_v1.FIELD_ACTUATOR_TARGET)],
         )
 
     def to_message(self) -> val_v1.EntryUpdate:
@@ -1177,19 +1192,19 @@ class VSSClient(BaseVSSClient):
                 yield {
                     update.entry.path: update.entry.value for update in updates
                 }
-        except RpcError as exc:
-            if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
-                logger.debug("v2 not available - falling back to v1 subscribe current values")
-                for updates in self.subscribe(
-                    entries=(
-                        SubscribeEntry(path, View.CURRENT_VALUE, (Field.VALUE,))
-                        for path in paths
-                    ),
-                    **rpc_kwargs,
-                ):
-                    yield {update.entry.path: update.entry.value for update in updates}
-            else:
-                raise VSSClientError.from_grpc_error(exc) from exc
+        except VSSClientError as exc:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+                raise
+
+            logger.debug("v2 not available - falling back to v1 subscribe current values")
+            for updates in self.subscribe(
+                entries=(
+                    SubscribeEntry(path, View.CURRENT_VALUE, (Field.VALUE,))
+                    for path in paths
+                ),
+                **rpc_kwargs,
+            ):
+                yield {update.entry.path: update.entry.value for update in updates}
 
     @check_connected
     def subscribe_target_values(
@@ -1210,23 +1225,23 @@ class VSSClient(BaseVSSClient):
             logger.debug("Try to subscribe actuation requests via v2")
             for updates in self.v2_subscribe_batch_actuation(paths, **rpc_kwargs):
                 yield {
-                    update.entry.path: update.entry.value for update in updates
+                    update.entry.path: update.entry.actuator_target for update in updates
                 }
-        except RpcError as exc:
-            if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
-                logger.debug("v2 not available - falling back to v1 subscribe target values")
-                for updates in self.subscribe(
-                    entries=(
-                        SubscribeEntry(path, View.TARGET_VALUE, (Field.ACTUATOR_TARGET,))
-                        for path in paths
-                    ),
-                    **rpc_kwargs,
-                ):
-                    yield {
-                        update.entry.path: update.entry.actuator_target for update in updates
-                    }
-            else:
-                raise VSSClientError.from_grpc_error(exc) from exc
+        except VSSClientError as exc:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+                raise
+
+            logger.debug("v2 not available - falling back to v1 subscribe target values")
+            for updates in self.subscribe(
+                entries=(
+                    SubscribeEntry(path, View.TARGET_VALUE, (Field.ACTUATOR_TARGET,))
+                    for path in paths
+                ),
+                **rpc_kwargs,
+            ):
+                yield {
+                    update.entry.path: update.entry.actuator_target for update in updates
+                }
 
     @check_connected
     def subscribe_metadata(
@@ -1411,12 +1426,15 @@ class VSSClient(BaseVSSClient):
         )
         req = self._prepare_v2_subscribe_request(paths)
         resp_stream = self.client_stub_v2.Subscribe(req, **rpc_kwargs)
-        for resp in resp_stream:
-            logger.debug("%s: %s", type(resp).__name__, resp)
-            yield [
-                EntryUpdate.from_tuple(path, dp)
-                for path, dp in resp.entries.items()
-            ]
+        try:
+            for resp in resp_stream:
+                logger.debug("%s: %s", type(resp).__name__, resp)
+                yield [
+                    EntryUpdate.from_tuple(path, dp)
+                    for path, dp in resp.entries.items()
+                ]
+        except RpcError as exc:
+            raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
     def v2_subscribe_batch_actuation(
@@ -1435,13 +1453,16 @@ class VSSClient(BaseVSSClient):
         self.ensure_id_mapping(paths, **rpc_kwargs)
         req = self._prepare_v2_provide_actuation_request(paths)
         resp_stream = self.client_stub_v2.OpenProviderStream(iter(req), **rpc_kwargs)
-        for resp in resp_stream:
-            logger.debug("batch %s: %s", type(resp).__name__, resp)
-            if resp.HasField("batch_actuate_stream_request"):
-                yield [
-                    EntryUpdate.from_tuple(self.get_path(actuate_req.signal_id), Datapoint(value=actuate_req.value))
-                    for actuate_req in resp.batch_actuate_stream_request.actuate_requests
-                ]
+        try:
+            for resp in resp_stream:
+                logger.debug("batch %s: %s", type(resp).__name__, resp)
+                if resp.HasField("batch_actuate_stream_request"):
+                    yield [
+                        EntryUpdate.from_actuate_value(self.get_path(actuate_req.signal_id), actuate_req.value)
+                        for actuate_req in resp.batch_actuate_stream_request.actuate_requests
+                    ]
+        except RpcError as exc:
+            raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
     def authorize(self, token: str, **rpc_kwargs) -> str:

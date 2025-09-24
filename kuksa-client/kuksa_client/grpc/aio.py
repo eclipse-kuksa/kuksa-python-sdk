@@ -33,6 +33,7 @@ from grpc.aio import AioRpcError
 
 from kuksa.val.v1 import val_pb2 as val_v1
 from kuksa.val.v1 import val_pb2_grpc as val_grpc_v1
+from kuksa.val.v2 import types_pb2 as types_v2
 from kuksa.val.v2 import val_pb2_grpc as val_grpc_v2
 
 from . import BaseVSSClient
@@ -57,6 +58,8 @@ class VSSClient(BaseVSSClient):
         super().__init__(*args, **kwargs)
         self.channel = None
         self.exit_stack = contextlib.AsyncExitStack()
+        self.path_to_id_mapping: Dict[str, int] = dict()
+        self.id_to_path_mapping: Dict[int, str] = dict()
 
     async def __aenter__(self):
         await self.connect()
@@ -66,9 +69,13 @@ class VSSClient(BaseVSSClient):
         await self.disconnect()
 
     async def connect(self, target_host=None):
+        self.path_to_id_mapping.clear()
+        self.id_to_path_mapping.clear()
+
         creds = self._load_creds()
         if target_host is None:
             target_host = self.target_host
+
         if creds is not None:
             logger.info("Establishing secure channel")
             if self.tls_server_name:
@@ -297,15 +304,25 @@ class VSSClient(BaseVSSClient):
                 for path, dp in updates.items():
                     print(f"Current value for {path} is now: {dp.value}")
         """
-        async for updates in self.subscribe(
-            entries=(
-                SubscribeEntry(path, View.CURRENT_VALUE, (Field.VALUE,))
-                for path in paths
-            ),
-            try_v2=True,
-            **rpc_kwargs,
-        ):
-            yield {update.entry.path: update.entry.value for update in updates}
+        try:
+            logger.debug("Try to subscribe current values via v2")
+            async for updates in self.v2_subscribe(paths=paths, **rpc_kwargs):
+                yield {
+                    update.entry.path: update.entry.value for update in updates
+                }
+        except VSSClientError as exc:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+                raise
+
+            logger.debug("v2 not available - falling back to v1 subscribe current values")
+            async for updates in self.subscribe(
+                entries=(
+                    SubscribeEntry(path, View.CURRENT_VALUE, (Field.VALUE,))
+                    for path in paths
+                ),
+                **rpc_kwargs,
+            ):
+                yield {update.entry.path: update.entry.value for update in updates}
 
     @check_connected_async_iter
     async def subscribe_target_values(
@@ -322,17 +339,27 @@ class VSSClient(BaseVSSClient):
                 for path, dp in updates.items():
                     print(f"Target value for {path} is now: {dp.value}")
         """
-        async for updates in self.subscribe(
-            entries=(
-                SubscribeEntry(path, View.TARGET_VALUE, (Field.ACTUATOR_TARGET,))
-                for path in paths
-            ),
-            try_v2=True,
-            **rpc_kwargs,
-        ):
-            yield {
-                update.entry.path: update.entry.actuator_target for update in updates
-            }
+        try:
+            logger.debug("Try to subscribe actuation requests via v2")
+            async for updates in self.v2_subscribe_batch_actuation(paths=paths, **rpc_kwargs):
+                yield {
+                    update.entry.path: update.entry.actuator_target for update in updates
+                }
+        except VSSClientError as exc:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+                raise
+
+            logger.debug("v2 not available - falling back to v1 subscribe target values")
+            async for updates in self.subscribe(
+                entries=(
+                    SubscribeEntry(path, View.TARGET_VALUE, (Field.ACTUATOR_TARGET,))
+                    for path in paths
+                ),
+                **rpc_kwargs,
+            ):
+                yield {
+                    update.entry.path: update.entry.actuator_target for update in updates
+                }
 
     @check_connected_async_iter
     async def subscribe_metadata(
@@ -434,6 +461,41 @@ class VSSClient(BaseVSSClient):
                 raise VSSClientError.from_grpc_error(exc) from exc
             self._process_set_response(resp)
 
+    def get_path(self, signal_id: types_v2.SignalID) -> str:
+        if signal_id.HasField("path"):
+            return signal_id.path
+        elif signal_id.HasField("id") and signal_id.id in self.id_to_path_mapping:
+            return self.id_to_path_mapping[signal_id.id]
+        return "<unknown signal>"
+
+    async def ensure_id_mapping(self, paths: Iterable[str], **rpc_kwargs):
+        for path in paths:
+            if path not in self.path_to_id_mapping:
+                # Prevent duplicate requests for the same path
+                self.path_to_id_mapping[path] = None
+                req = self._prepare_v2_list_metadata_request(path)
+                try:
+                    resp = await self.client_stub_v2.ListMetadata(req, **rpc_kwargs)
+                    logger.debug("%s: %s", type(resp).__name__, resp)
+                    if len(resp.metadata) == 1:
+                        self.path_to_id_mapping[path] = resp.metadata[0].id
+                        self.id_to_path_mapping[resp.metadata[0].id] = path
+                    else:
+                        del self.path_to_id_mapping[path]
+                        raise VSSClientError(
+                            error={
+                                "code": grpc.StatusCode.NOT_FOUND.value[0],
+                                "reason": grpc.StatusCode.NOT_FOUND.value[1],
+                                "message": f"Path {path} not found on server",
+                            },
+                            errors=[],
+                        )
+                except AioRpcError as exc:
+                    if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
+                        logger.debug("v2 not available - skip querying ids")
+                        return
+                    raise VSSClientError.from_grpc_error(exc) from exc
+
     @check_connected_async_iter
     async def subscribe(
         self,
@@ -446,36 +508,84 @@ class VSSClient(BaseVSSClient):
             rpc_kwargs
                 grpc.*MultiCallable kwargs e.g. timeout, metadata, credentials.
         """
+
+        if try_v2:
+            raise VSSClientError(
+                error={
+                    "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
+                    "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
+                    "message": ("Method subscribe supports v1, only. "
+                                "Use v2_subscribe or v2_subscribe_batch_actuation instead."),
+                },
+                errors=[],
+            )
+
+        logger.debug("Try subscribing via v1")
         rpc_kwargs["metadata"] = self.generate_metadata_header(
             rpc_kwargs.get("metadata")
         )
-        if try_v2:
-            logger.debug("Trying v2")
-            req = self._prepare_subscribev2_request(entries)
-            resp_stream = self.client_stub_v2.Subscribe(req, **rpc_kwargs)
-            try:
-                async for resp in resp_stream:
-                    logger.debug("%s: %s", type(resp).__name__, resp)
+        req = self._prepare_subscribe_request(entries)
+        resp_stream = self.client_stub_v1.Subscribe(req, **rpc_kwargs)
+        try:
+            async for resp in resp_stream:
+                logger.debug("%s: %s", type(resp).__name__, resp)
+                yield [EntryUpdate.from_message(update) for update in resp.updates]
+        except AioRpcError as exc:
+            raise VSSClientError.from_grpc_error(exc) from exc
+
+    @check_connected_async_iter
+    async def v2_subscribe(
+        self, paths: Iterable[str], **rpc_kwargs
+    ) -> AsyncIterator[List[EntryUpdate]]:
+        """
+        Parameters:
+            rpc_kwargs
+                grpc.*MultiCallable kwargs e.g. timeout, metadata, credentials.
+        """
+
+        logger.debug("Subscribe current values via v2")
+        rpc_kwargs["metadata"] = self.generate_metadata_header(
+            rpc_kwargs.get("metadata")
+        )
+        req = self._prepare_v2_subscribe_request(paths)
+        resp_stream = self.client_stub_v2.Subscribe(req, **rpc_kwargs)
+        try:
+            async for resp in resp_stream:
+                logger.debug("%s: %s", type(resp).__name__, resp)
+                yield [
+                    EntryUpdate.from_tuple(path, dp)
+                    for path, dp in resp.entries.items()
+                ]
+        except AioRpcError as exc:
+            raise VSSClientError.from_grpc_error(exc) from exc
+
+    @check_connected_async_iter
+    async def v2_subscribe_batch_actuation(
+        self, paths: Iterable[str], **rpc_kwargs
+    ) -> AsyncIterator[List[EntryUpdate]]:
+        """
+        Parameters:
+            rpc_kwargs
+                grpc.*MultiCallable kwargs e.g. timeout, metadata, credentials.
+        """
+
+        logger.debug("Subscribe actuation requests via v2")
+        rpc_kwargs["metadata"] = self.generate_metadata_header(
+            rpc_kwargs.get("metadata")
+        )
+        await self.ensure_id_mapping(paths, **rpc_kwargs)
+        req = self._prepare_v2_provide_actuation_request(paths)
+        resp_stream = self.client_stub_v2.OpenProviderStream(iter(req), **rpc_kwargs)
+        try:
+            async for resp in resp_stream:
+                logger.debug("batch %s: %s", type(resp).__name__, resp)
+                if resp.HasField("batch_actuate_stream_request"):
                     yield [
-                        EntryUpdate.from_tuple(path, dp)
-                        for path, dp in resp.entries.items()
+                        EntryUpdate.from_actuate_value(self.get_path(actuate_req.signal_id), actuate_req.value)
+                        for actuate_req in resp.batch_actuate_stream_request.actuate_requests
                     ]
-            except AioRpcError as exc:
-                if exc.code() == grpc.StatusCode.UNIMPLEMENTED:
-                    logger.debug("v2 not available fall back to v1 instead")
-                    await self.subscribe(entries)
-                else:
-                    raise VSSClientError.from_grpc_error(exc) from exc
-        else:
-            logger.debug("Trying v1")
-            req = self._prepare_subscribe_request(entries)
-            resp_stream = self.client_stub_v1.Subscribe(req, **rpc_kwargs)
-            try:
-                async for resp in resp_stream:
-                    logger.debug("%s: %s", type(resp).__name__, resp)
-                    yield [EntryUpdate.from_message(update) for update in resp.updates]
-            except AioRpcError as exc:
-                raise VSSClientError.from_grpc_error(exc) from exc
+        except AioRpcError as exc:
+            raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected_async
     async def authorize(self, token: str, **rpc_kwargs) -> str:

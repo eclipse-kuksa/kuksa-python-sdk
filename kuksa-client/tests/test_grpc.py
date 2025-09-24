@@ -648,7 +648,7 @@ class TestVSSClient:
                 EntryUpdate(DataEntry('Vehicle.Chassis.Height',
                             value=Datapoint(666)), (Field.VALUE,)),
             ]
-        mocker.patch.object(client, 'subscribe',
+        mocker.patch.object(client, 'v2_subscribe',
                             side_effect=subscribe_response_stream)
 
         received_updates = {}
@@ -657,13 +657,10 @@ class TestVSSClient:
         ]):
             received_updates.update(updates)
 
-        assert list(client.subscribe.call_args_list[0][1]['entries']) == [
-            SubscribeEntry('Vehicle.Speed',
-                           View.CURRENT_VALUE, (Field.VALUE,)),
-            SubscribeEntry('Vehicle.ADAS.ABS.IsActive',
-                           View.CURRENT_VALUE, (Field.VALUE,)),
-            SubscribeEntry('Vehicle.Chassis.Height',
-                           View.CURRENT_VALUE, (Field.VALUE,)),
+        assert list(client.v2_subscribe.call_args_list[0][1]['paths']) == [
+            'Vehicle.Speed',
+            'Vehicle.ADAS.ABS.IsActive',
+            'Vehicle.Chassis.Height',
         ]
         assert received_updates == {
             'Vehicle.Speed': Datapoint(42.0,
@@ -686,7 +683,7 @@ class TestVSSClient:
                 EntryUpdate(DataEntry('Vehicle.Chassis.SteeringWheel.Tilt',
                             actuator_target=Datapoint(42)), (Field.ACTUATOR_TARGET,)),
             ]
-        mocker.patch.object(client, 'subscribe',
+        mocker.patch.object(client, 'v2_subscribe_batch_actuation',
                             side_effect=subscribe_response_stream)
 
         received_updates = {}
@@ -695,11 +692,9 @@ class TestVSSClient:
         ]):
             received_updates.update(updates)
 
-        assert list(client.subscribe.call_args_list[0][1]['entries']) == [
-            SubscribeEntry('Vehicle.ADAS.ABS.IsActive',
-                           View.TARGET_VALUE, (Field.ACTUATOR_TARGET,)),
-            SubscribeEntry('Vehicle.Chassis.SteeringWheel.Tilt',
-                           View.TARGET_VALUE, (Field.ACTUATOR_TARGET,)),
+        assert list(client.v2_subscribe_batch_actuation.call_args_list[0][1]['paths']) == [
+            'Vehicle.ADAS.ABS.IsActive',
+            'Vehicle.Chassis.SteeringWheel.Tilt',
         ]
         assert received_updates == {
             'Vehicle.ADAS.ABS.IsActive': Datapoint(True, datetime.datetime(2022, 11, 7, tzinfo=datetime.timezone.utc)),
@@ -1768,22 +1763,14 @@ class TestVSSClient:
             )
 
             actual_responses = []
-            async for updates in client.subscribe(
-                entries=(
-                    entry
-                    for entry in (  # generator is intentional (Iterable)
-                        EntryRequest(
-                            "Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)
-                        ),
-                        EntryRequest(
-                            "Vehicle.ADAS.ABS.IsActive",
-                            # Specified View is ignored so we can use anyone :-)
-                            View.METADATA,
-                            (Field.VALUE,),
-                        ),
+            async for updates in client.v2_subscribe(
+                paths=(
+                    path
+                    for path in (  # generator is intentional (Iterable)
+                        "Vehicle.Speed",
+                        "Vehicle.ADAS.ABS.IsActive",
                     )
                 ),
-                try_v2=True,
             ):
                 actual_responses.append(updates)
 
@@ -1859,21 +1846,14 @@ class TestVSSClient:
             actual_responses = []
 
             with pytest.raises(VSSClientError):
-                async for updates in client.subscribe(
-                    entries=(
-                        entry
-                        for entry in (  # generator is intentional (Iterable)
-                            EntryRequest(
-                                "Vehicle.Speed", View.TARGET_VALUE, (Field.ACTUATOR_TARGET,)
-                            ),
-                            EntryRequest(
-                                "Vehicle.ADAS.ABS.IsActive",
-                                View.TARGET_VALUE,
-                                (Field.ACTUATOR_TARGET,),
-                            ),
+                async for updates in client.v2_subscribe_batch_actuation(
+                    paths=(
+                        path
+                        for path in (  # generator is intentional (Iterable)
+                            "Vehicle.Speed",
+                            "Vehicle.ADAS.ABS.IsActive",
                         )
                     ),
-                    try_v2=True,
                 ):
                     actual_responses.append(updates)
 
@@ -1900,7 +1880,7 @@ class TestVSSClient:
             "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
         ) as client:
             with pytest.raises(VSSClientError):
-                async for _ in client.subscribe(entries=(), try_v2=True):
+                async for _ in client.v2_subscribe(paths=()):
                     pass
 
     @pytest.mark.usefixtures("mocked_databroker")
@@ -1926,17 +1906,7 @@ class TestVSSClient:
             "127.0.0.1", unused_tcp_port, ensure_startup_connection=False
         ) as client:
             with pytest.raises(VSSClientError):
-                async for _ in client.subscribe(
-                    entries=(
-                        entry
-                        for entry in (  # generator is intentional (Iterable)
-                            EntryRequest(
-                                "Does.Not.Exist", View.CURRENT_VALUE, (Field.VALUE,)
-                            ),
-                        )
-                    ),
-                    try_v2=True,
-                ):
+                async for _ in client.v2_subscribe(paths=["Does.Not.Exist"]):
                     pass
 
     @pytest.mark.usefixtures("mocked_databroker")
@@ -2124,11 +2094,8 @@ class TestSubscriberManager:
                 response for response in responses
             )
 
-            subscribe_response_stream = client.subscribe(
-                entries=(
-                    EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
-                ),
-                try_v2=True,
+            subscribe_response_stream = client.v2_subscribe(
+                paths=("Vehicle.Speed"),
             )
             sub_uid = await subscriber_manager.add_subscriber(
                 subscribe_response_stream, callback=callback
@@ -2183,11 +2150,8 @@ class TestSubscriberManager:
             val_servicer_v2.Subscribe.return_value = (
                 response for response in responses
             )
-            subscribe_response_stream = client.subscribe(
-                entries=(
-                    EntryRequest("Vehicle.Speed", View.CURRENT_VALUE, (Field.VALUE,)),
-                ),
-                try_v2=True,
+            subscribe_response_stream = client.v2_subscribe(
+                paths=("Vehicle.Speed"),
             )
             sub_uid = await subscriber_manager.add_subscriber(
                 subscribe_response_stream, callback=mocker.Mock()

@@ -47,6 +47,8 @@ def val_servicer_v1_fixture(mocker):
 @pytest.fixture(name="val_servicer_v2", scope="function")
 def val_servicer_v2_fixture(mocker):
     servicer_v2 = val_v2.VALServicer()
+    mocker.patch.object(servicer_v2, "ListMetadata", spec=True)
+    mocker.patch.object(servicer_v2, "OpenProviderStream", spec=True)
     mocker.patch.object(servicer_v2, "PublishValue", spec=True)
     mocker.patch.object(servicer_v2, "Subscribe", spec=True)
 
