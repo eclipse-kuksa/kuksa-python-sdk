@@ -1,5 +1,5 @@
 ########################################################################
-# Copyright (c) 2022 Robert Bosch GmbH
+# Copyright (c) 2022-2025 Robert Bosch GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -311,7 +311,7 @@ class VSSClient(BaseVSSClient):
                     update.entry.path: update.entry.value for update in updates
                 }
         except VSSClientError as exc:
-            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED.value[0]:
                 raise
 
             logger.debug("v2 not available - falling back to v1 subscribe current values")
@@ -346,7 +346,7 @@ class VSSClient(BaseVSSClient):
                     update.entry.path: update.entry.actuator_target for update in updates
                 }
         except VSSClientError as exc:
-            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED.value[0]:
                 raise
 
             logger.debug("v2 not available - falling back to v1 subscribe target values")

@@ -1193,7 +1193,7 @@ class VSSClient(BaseVSSClient):
                     update.entry.path: update.entry.value for update in updates
                 }
         except VSSClientError as exc:
-            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED.value[0]:
                 raise
 
             logger.debug("v2 not available - falling back to v1 subscribe current values")
@@ -1228,7 +1228,7 @@ class VSSClient(BaseVSSClient):
                     update.entry.path: update.entry.actuator_target for update in updates
                 }
         except VSSClientError as exc:
-            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED:
+            if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED.value[0]:
                 raise
 
             logger.debug("v2 not available - falling back to v1 subscribe target values")
