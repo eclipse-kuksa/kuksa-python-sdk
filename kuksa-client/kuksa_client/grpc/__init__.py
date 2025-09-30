@@ -991,6 +991,9 @@ class VSSClient(BaseVSSClient):
         return wrapper
 
     def connect(self, target_host=None):
+        # Reset the id mapping on each new connection to the data broker because the broker
+        # could have been restarted and assigned new ids to paths in between.
+        # Furthermore, the specified target host could have changed.
         self.path_to_id_mapping.clear()
         self.id_to_path_mapping.clear()
 
@@ -1223,7 +1226,7 @@ class VSSClient(BaseVSSClient):
         """
         try:
             logger.debug("Try to subscribe actuation requests via v2")
-            for updates in self.v2_subscribe_batch_actuation(paths, **rpc_kwargs):
+            for updates in self.v2_subscribe_actuation_requests(paths, **rpc_kwargs):
                 yield {
                     update.entry.path: update.entry.actuator_target for update in updates
                 }
@@ -1392,7 +1395,7 @@ class VSSClient(BaseVSSClient):
                     "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
                     "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
                     "message": ("Method subscribe supports v1, only. "
-                                "Use v2_subscribe or v2_subscribe_batch_actuation instead."),
+                                "Use v2_subscribe or v2_subscribe_actuation_requests instead."),
                 },
                 errors=[],
             )
@@ -1437,7 +1440,7 @@ class VSSClient(BaseVSSClient):
             raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected
-    def v2_subscribe_batch_actuation(
+    def v2_subscribe_actuation_requests(
         self, paths: Iterable[str], **rpc_kwargs
     ) -> Iterator[List[EntryUpdate]]:
         """

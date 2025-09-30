@@ -683,7 +683,7 @@ class TestVSSClient:
                 EntryUpdate(DataEntry('Vehicle.Chassis.SteeringWheel.Tilt',
                             actuator_target=Datapoint(42)), (Field.ACTUATOR_TARGET,)),
             ]
-        mocker.patch.object(client, 'v2_subscribe_batch_actuation',
+        mocker.patch.object(client, 'v2_subscribe_actuation_requests',
                             side_effect=subscribe_response_stream)
 
         received_updates = {}
@@ -692,7 +692,7 @@ class TestVSSClient:
         ]):
             received_updates.update(updates)
 
-        assert list(client.v2_subscribe_batch_actuation.call_args_list[0][1]['paths']) == [
+        assert list(client.v2_subscribe_actuation_requests.call_args_list[0][1]['paths']) == [
             'Vehicle.ADAS.ABS.IsActive',
             'Vehicle.Chassis.SteeringWheel.Tilt',
         ]
@@ -1846,7 +1846,7 @@ class TestVSSClient:
             actual_responses = []
 
             with pytest.raises(VSSClientError):
-                async for updates in client.v2_subscribe_batch_actuation(
+                async for updates in client.v2_subscribe_actuation_requests(
                     paths=(
                         path
                         for path in (  # generator is intentional (Iterable)
