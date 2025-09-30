@@ -341,7 +341,7 @@ class VSSClient(BaseVSSClient):
         """
         try:
             logger.debug("Try to subscribe actuation requests via v2")
-            async for updates in self.v2_subscribe_batch_actuation(paths=paths, **rpc_kwargs):
+            async for updates in self.v2_subscribe_actuation_requests(paths=paths, **rpc_kwargs):
                 yield {
                     update.entry.path: update.entry.actuator_target for update in updates
                 }
@@ -515,7 +515,7 @@ class VSSClient(BaseVSSClient):
                     "code": grpc.StatusCode.INVALID_ARGUMENT.value[0],
                     "reason": grpc.StatusCode.INVALID_ARGUMENT.value[1],
                     "message": ("Method subscribe supports v1, only. "
-                                "Use v2_subscribe or v2_subscribe_batch_actuation instead."),
+                                "Use v2_subscribe or v2_subscribe_actuation_requests instead."),
                 },
                 errors=[],
             )
@@ -560,7 +560,7 @@ class VSSClient(BaseVSSClient):
             raise VSSClientError.from_grpc_error(exc) from exc
 
     @check_connected_async_iter
-    async def v2_subscribe_batch_actuation(
+    async def v2_subscribe_actuation_requests(
         self, paths: Iterable[str], **rpc_kwargs
     ) -> AsyncIterator[List[EntryUpdate]]:
         """
