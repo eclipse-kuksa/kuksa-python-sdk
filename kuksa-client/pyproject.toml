@@ -2,6 +2,8 @@
 requires = [
     # Make sure to use the same exact version criteria in setup.cfg and update requirements.txt after changing
     "grpcio-tools==1.68.0",
+    # Explicit protobuf pin matching setup.cfg to avoid gencode/runtime version mismatch. Fixes #54.
+    "protobuf>=5.29.6,<6.0dev",
     "setuptools>=77",
     "setuptools-git-versioning",
     "wheel",
