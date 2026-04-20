@@ -1188,13 +1188,32 @@ class VSSClient(BaseVSSClient):
             ]):
                 for path, dp in updates.items():
                     print(f"Current value for {path} is now: {dp.value}")
+
+        Branch paths (e.g. ``['Vehicle']`` or ``['Vehicle.Cabin.*']``) are
+        accepted: if the v2 Subscribe RPC rejects a path with NOT_FOUND, the
+        paths are expanded via ListMetadata and the subscription is retried
+        with the resulting leaf signals. This restores the wildcard semantics
+        that v1 provided natively.
         """
+        paths = list(paths)
         try:
             logger.debug("Try to subscribe current values via v2")
-            for updates in self.v2_subscribe(paths, **rpc_kwargs):
-                yield {
-                    update.entry.path: update.entry.value for update in updates
-                }
+            try:
+                for updates in self.v2_subscribe(paths, **rpc_kwargs):
+                    yield {
+                        update.entry.path: update.entry.value for update in updates
+                    }
+            except VSSClientError as exc:
+                if exc.error["code"] != grpc.StatusCode.NOT_FOUND.value[0]:
+                    raise
+                logger.debug(
+                    "v2 Subscribe returned NOT_FOUND; expanding branch paths via ListMetadata"
+                )
+                expanded = self._expand_v2_branch_paths(paths, **rpc_kwargs)
+                for updates in self.v2_subscribe(expanded, **rpc_kwargs):
+                    yield {
+                        update.entry.path: update.entry.value for update in updates
+                    }
         except VSSClientError as exc:
             if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED.value[0]:
                 raise
@@ -1350,6 +1369,43 @@ class VSSClient(BaseVSSClient):
         elif signal_id.HasField("id") and signal_id.id in self.id_to_path_mapping:
             return self.id_to_path_mapping[signal_id.id]
         return "<unknown signal>"
+
+    def _expand_v2_branch_paths(
+        self, paths: Iterable[str], **rpc_kwargs
+    ) -> List[str]:
+        """Expand branch / wildcard paths into concrete leaf signals.
+
+        For each input path, calls ``ListMetadata(root=path)`` and returns
+        every signal path beneath that branch. Leaf paths pass through
+        (ListMetadata returns a single entry). Non-existent paths surface
+        as NOT_FOUND. Trailing ``.*`` suffixes are stripped before lookup.
+
+        Order is preserved and duplicates (from overlapping branches) are
+        removed. Used to restore v1-style wildcard semantics on top of the
+        v2 Subscribe RPC, which only accepts fully-qualified leaf paths.
+        """
+        rpc_kwargs["metadata"] = self.generate_metadata_header(
+            rpc_kwargs.get("metadata")
+        )
+        expanded: List[str] = []
+        for path in paths:
+            lookup = path[:-2] if path.endswith(".*") else path
+            req = self._prepare_v2_list_metadata_request(lookup)
+            try:
+                resp = self.client_stub_v2.ListMetadata(req, **rpc_kwargs)
+            except RpcError as exc:
+                raise VSSClientError.from_grpc_error(exc) from exc
+            if not resp.metadata:
+                raise VSSClientError(
+                    error={
+                        "code": grpc.StatusCode.NOT_FOUND.value[0],
+                        "reason": grpc.StatusCode.NOT_FOUND.value[1],
+                        "message": f"Path {path} not found on server",
+                    },
+                    errors=[],
+                )
+            expanded.extend(m.path for m in resp.metadata)
+        return list(dict.fromkeys(expanded))
 
     def ensure_id_mapping(self, paths: Iterable[str], **rpc_kwargs):
         for path in paths:
