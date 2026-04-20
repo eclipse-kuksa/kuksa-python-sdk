@@ -670,6 +670,68 @@ class TestVSSClient:
             'Vehicle.Chassis.Height': Datapoint(666),
         }
 
+    async def test_subscribe_current_values_branch_path_expansion(
+        self, mocker, unused_tcp_port,
+    ):
+        """Branch path (e.g. 'Vehicle') is rejected by v2 Subscribe with
+        NOT_FOUND; client falls back to ListMetadata expansion and retries
+        with the resulting leaf signals (restores pre-0.5.1 semantics for
+        issue #53)."""
+        client = VSSClient('127.0.0.1', unused_tcp_port)
+        client.connected = True  # To bypass connection check
+
+        not_found = VSSClientError(
+            error={
+                "code": grpc.StatusCode.NOT_FOUND.value[0],
+                "reason": grpc.StatusCode.NOT_FOUND.value[1],
+                "message": "Path not found",
+            },
+            errors=[],
+        )
+
+        call_count = {"v2_subscribe": 0}
+
+        async def v2_subscribe_side_effect(paths, **kwargs):
+            call_count["v2_subscribe"] += 1
+            if call_count["v2_subscribe"] == 1:
+                # First call with branch path — server rejects
+                raise not_found
+            # Second call with expanded leaves — yield real data
+            yield [
+                EntryUpdate(DataEntry(
+                    'Vehicle.Speed', value=Datapoint(42.0),
+                ), (Field.VALUE,)),
+                EntryUpdate(DataEntry(
+                    'Vehicle.ADAS.ABS.IsActive', value=Datapoint(True),
+                ), (Field.VALUE,)),
+            ]
+        mocker.patch.object(
+            client, 'v2_subscribe', side_effect=v2_subscribe_side_effect,
+        )
+
+        async def expand_side_effect(paths, **kwargs):
+            # Simulate ListMetadata resolving 'Vehicle' to two concrete leaves
+            assert list(paths) == ['Vehicle']
+            return ['Vehicle.Speed', 'Vehicle.ADAS.ABS.IsActive']
+        mocker.patch.object(
+            client, '_expand_v2_branch_paths', side_effect=expand_side_effect,
+        )
+
+        received_updates: Dict[str, Datapoint] = {}
+        async for updates in client.subscribe_current_values(['Vehicle']):
+            received_updates.update(updates)
+
+        assert call_count["v2_subscribe"] == 2
+        # First call used the original branch path; retry used expanded leaves.
+        first_paths = list(client.v2_subscribe.call_args_list[0][1]['paths'])
+        second_paths = list(client.v2_subscribe.call_args_list[1][1]['paths'])
+        assert first_paths == ['Vehicle']
+        assert second_paths == ['Vehicle.Speed', 'Vehicle.ADAS.ABS.IsActive']
+        assert received_updates == {
+            'Vehicle.Speed': Datapoint(42.0),
+            'Vehicle.ADAS.ABS.IsActive': Datapoint(True),
+        }
+
     async def test_subscribe_target_values(self, mocker, unused_tcp_port):
         client = VSSClient('127.0.0.1', unused_tcp_port)
         client.connected = True  # To bypass connection check
