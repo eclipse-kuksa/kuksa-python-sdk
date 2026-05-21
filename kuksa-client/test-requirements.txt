@@ -41,19 +41,21 @@ ply==3.11
 protobuf==5.29.6
     # via grpcio-tools
 pygments==2.20.0
-    # via kuksa_client (setup.cfg)
+    # via
+    #   kuksa_client (setup.cfg)
+    #   pytest
 pylint==3.3.1
     # via kuksa_client (setup.cfg)
 pyperclip==1.9.0
     # via cmd2
-pytest==8.3.3
+pytest==9.0.3
     # via
     #   kuksa_client (setup.cfg)
     #   pytest-asyncio
     #   pytest-cov
     #   pytest-mock
     #   pytest-timeout
-pytest-asyncio==0.24.0
+pytest-asyncio==1.3.0
     # via kuksa_client (setup.cfg)
 pytest-cov==6.0.0
     # via kuksa_client (setup.cfg)
