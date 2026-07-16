@@ -33,10 +33,10 @@ from pygments import lexers
 from pygments import formatters
 from cmd2 import Cmd
 from cmd2 import CompletionItem
+from cmd2 import Completions
 from cmd2 import with_argparser
 from cmd2 import with_category
 from cmd2 import constants
-from cmd2.utils import basic_complete
 from urllib.parse import urlparse
 
 from kuksa_client import KuksaClientThread
@@ -108,31 +108,24 @@ class TestClient(Cmd):
 
     def path_completer(self, text, line, begidx, endidx):
         if not self.connection_established():
-            return None
+            return Completions()
 
         if len(self.pathCompletionItems) == 0:
             self.refresh_metadata()
 
-        # Normalize the delimiter used
         delimiter = "."
         if "/" in text:
             delimiter = "/"
             text = text.replace(delimiter, ".")
 
-        # Generate the list of all possible completions
         self.pathCompletionItems = []
         for path in self.metadata.keys():
-            # Compare case insensitive
             if path.lower().startswith(text.lower()):
                 if delimiter != ".":
                     path = path.replace(".", delimiter)
-                self.pathCompletionItems.append(path)
+                self.pathCompletionItems.append(CompletionItem(path))
 
-        # Generate the list of completions to display
-        self.display_matches = display_completions(self.pathCompletionItems, delimiter)
-
-        # Return all completions
-        return self.pathCompletionItems
+        return Cmd.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
 
     def subscribeCallback(self, logPath, resp):
         if logPath is None:
@@ -152,7 +145,7 @@ class TestClient(Cmd):
         self.pathCompletionItems = []
         for sub_id in self.subscribeIds:
             self.pathCompletionItems.append(CompletionItem(sub_id))
-        return basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
+        return Cmd.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
 
     COMM_SETUP_COMMANDS = "Communication Set-up Commands"
     VSS_COMMANDS = "Kuksa Interaction Commands (Supported by both KUKSA Databroker and KUKSA Server)"
@@ -175,12 +168,12 @@ class TestClient(Cmd):
     ap_authorize.add_argument(
         "token_or_tokenfile",
         help="JWT(or the file storing the token) for authorizing the client.",
-        completer_method=tokenfile_completer_method,
+        completer=tokenfile_completer_method,
     )
 
     ap_setValue = argparse.ArgumentParser()
     ap_setValue.add_argument(
-        "Path", help="Path to be set", completer_method=path_completer
+        "Path", help="Path to be set", completer=path_completer
     )
     ap_setValue.add_argument("Value", nargs="+", help="Value to be set")
     ap_setValue.add_argument(
@@ -200,7 +193,7 @@ class TestClient(Cmd):
 
     ap_getValue = argparse.ArgumentParser()
     ap_getValue.add_argument(
-        "Path", help="Path to be read", completer_method=path_completer
+        "Path", help="Path to be read", completer=path_completer
     )
     ap_getValue.add_argument(
         "-a", "--attribute", help="Attribute to be get", default="value"
@@ -211,7 +204,7 @@ class TestClient(Cmd):
         "Path",
         help="Path whose value is to be read",
         nargs="+",
-        completer_method=path_completer,
+        completer=path_completer,
     )
     ap_getValues.add_argument(
         "-a", "--attribute", help="Attribute to be get", default="value"
@@ -221,7 +214,7 @@ class TestClient(Cmd):
     ap_setTargetValue.add_argument(
         "Path",
         help="Path whose target value to be set",
-        completer_method=path_completer,
+        completer=path_completer,
     )
     ap_setTargetValue.add_argument("Value", help="Value to be set")
 
@@ -237,7 +230,7 @@ class TestClient(Cmd):
     ap_getTargetValue.add_argument(
         "Path",
         help="Path whose target value is to be read",
-        completer_method=path_completer,
+        completer=path_completer,
     )
 
     ap_getTargetValues = argparse.ArgumentParser()
@@ -245,12 +238,12 @@ class TestClient(Cmd):
         "Path",
         help="Path whose target value is to be read",
         nargs="+",
-        completer_method=path_completer,
+        completer=path_completer,
     )
 
     ap_subscribe = argparse.ArgumentParser()
     ap_subscribe.add_argument(
-        "Path", help="Path to subscribe to", completer_method=path_completer
+        "Path", help="Path to subscribe to", completer=path_completer
     )
     ap_subscribe.add_argument(
         "-a", "--attribute", help="Attribute to subscribe to", default="value"
@@ -265,7 +258,7 @@ class TestClient(Cmd):
 
     ap_subscribeMultiple = argparse.ArgumentParser()
     ap_subscribeMultiple.add_argument(
-        "Path", help="Path to subscribe to", nargs="+", completer_method=path_completer
+        "Path", help="Path to subscribe to", nargs="+", completer=path_completer
     )
     ap_subscribeMultiple.add_argument(
         "-a", "--attribute", help="Attribute to subscribe to", default="value"
@@ -281,18 +274,18 @@ class TestClient(Cmd):
     ap_unsubscribe.add_argument(
         "SubscribeId",
         help="Corresponding subscription Id",
-        completer_method=subscriptionIdCompleter,
+        completer=subscriptionIdCompleter,
     )
 
     ap_getMetaData = argparse.ArgumentParser()
     ap_getMetaData.add_argument(
         "Path",
         help="Path whose metadata is to be read",
-        completer_method=path_completer,
+        completer=path_completer,
     )
     ap_updateMetaData = argparse.ArgumentParser()
     ap_updateMetaData.add_argument(
-        "Path", help="Path whose MetaData is to update", completer_method=path_completer
+        "Path", help="Path whose MetaData is to update", completer=path_completer
     )
     ap_updateMetaData.add_argument(
         "Json",
@@ -308,7 +301,7 @@ class TestClient(Cmd):
     ap_updateVSSTree.add_argument(
         "Json",
         help="Json tree to update VSS",
-        completer_method=jsonfile_completer_method,
+        completer=jsonfile_completer_method,
     )
 
     # Constructor, request names after protocol to avoid errors
