@@ -32,6 +32,7 @@ from pygments import highlight
 from pygments import lexers
 from pygments import formatters
 from cmd2 import Cmd
+from cmd2 import Cmd2ArgumentParser
 from cmd2 import CompletionItem
 from cmd2 import Completions
 from cmd2 import with_argparser
@@ -125,7 +126,7 @@ class TestClient(Cmd):
                     path = path.replace(".", delimiter)
                 self.pathCompletionItems.append(CompletionItem(path))
 
-        return Cmd.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
+        return self.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
 
     def subscribeCallback(self, logPath, resp):
         if logPath is None:
@@ -145,22 +146,22 @@ class TestClient(Cmd):
         self.pathCompletionItems = []
         for sub_id in self.subscribeIds:
             self.pathCompletionItems.append(CompletionItem(sub_id))
-        return Cmd.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
+        return self.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
 
     COMM_SETUP_COMMANDS = "Communication Set-up Commands"
     VSS_COMMANDS = "Kuksa Interaction Commands (Supported by both KUKSA Databroker and KUKSA Server)"
     VSS_COMMANDS_SERVER = "Kuksa Interaction Commands (Only supported by KUKSA Server)"
     INFO_COMMANDS = "Info Commands"
 
-    ap_connect = argparse.ArgumentParser()
+    ap_connect = Cmd2ArgumentParser()
     ap_connect.add_argument(
         "server",
         help=f"VSS server to connect to. Format: protocol://host[:port]. \
         Supported protocols: [grpc, grpcs, ws, wss]. Example: {DEFAULT_KUKSA_ADDRESS}",
     )
 
-    ap_disconnect = argparse.ArgumentParser()
-    ap_authorize = argparse.ArgumentParser()
+    ap_disconnect = Cmd2ArgumentParser()
+    ap_authorize = Cmd2ArgumentParser()
     tokenfile_completer_method = functools.partial(
         Cmd.path_complete,
         path_filter=lambda path: (os.path.isdir(path) or path.endswith(".token")),
@@ -171,7 +172,7 @@ class TestClient(Cmd):
         completer=tokenfile_completer_method,
     )
 
-    ap_setValue = argparse.ArgumentParser()
+    ap_setValue = Cmd2ArgumentParser()
     ap_setValue.add_argument(
         "Path", help="Path to be set", completer=path_completer
     )
@@ -180,7 +181,7 @@ class TestClient(Cmd):
         "-a", "--attribute", help="Attribute to be set", default="value"
     )
 
-    ap_setValues = argparse.ArgumentParser()
+    ap_setValues = Cmd2ArgumentParser()
     ap_setValues.add_argument(
         "Path=Value",
         help="Path and new value this path is to be set with",
@@ -191,7 +192,7 @@ class TestClient(Cmd):
         "-a", "--attribute", help="Attribute to be set", default="value"
     )
 
-    ap_getValue = argparse.ArgumentParser()
+    ap_getValue = Cmd2ArgumentParser()
     ap_getValue.add_argument(
         "Path", help="Path to be read", completer=path_completer
     )
@@ -199,7 +200,7 @@ class TestClient(Cmd):
         "-a", "--attribute", help="Attribute to be get", default="value"
     )
 
-    ap_getValues = argparse.ArgumentParser()
+    ap_getValues = Cmd2ArgumentParser()
     ap_getValues.add_argument(
         "Path",
         help="Path whose value is to be read",
@@ -210,7 +211,7 @@ class TestClient(Cmd):
         "-a", "--attribute", help="Attribute to be get", default="value"
     )
 
-    ap_setTargetValue = argparse.ArgumentParser()
+    ap_setTargetValue = Cmd2ArgumentParser()
     ap_setTargetValue.add_argument(
         "Path",
         help="Path whose target value to be set",
@@ -218,7 +219,7 @@ class TestClient(Cmd):
     )
     ap_setTargetValue.add_argument("Value", help="Value to be set")
 
-    ap_setTargetValues = argparse.ArgumentParser()
+    ap_setTargetValues = Cmd2ArgumentParser()
     ap_setTargetValues.add_argument(
         "Path=Value",
         help="Path and new target value this path is to be set with",
@@ -226,14 +227,14 @@ class TestClient(Cmd):
         type=assignment_statement,
     )
 
-    ap_getTargetValue = argparse.ArgumentParser()
+    ap_getTargetValue = Cmd2ArgumentParser()
     ap_getTargetValue.add_argument(
         "Path",
         help="Path whose target value is to be read",
         completer=path_completer,
     )
 
-    ap_getTargetValues = argparse.ArgumentParser()
+    ap_getTargetValues = Cmd2ArgumentParser()
     ap_getTargetValues.add_argument(
         "Path",
         help="Path whose target value is to be read",
@@ -241,7 +242,7 @@ class TestClient(Cmd):
         completer=path_completer,
     )
 
-    ap_subscribe = argparse.ArgumentParser()
+    ap_subscribe = Cmd2ArgumentParser()
     ap_subscribe.add_argument(
         "Path", help="Path to subscribe to", completer=path_completer
     )
@@ -256,7 +257,7 @@ class TestClient(Cmd):
         action="store_true",
     )
 
-    ap_subscribeMultiple = argparse.ArgumentParser()
+    ap_subscribeMultiple = Cmd2ArgumentParser()
     ap_subscribeMultiple.add_argument(
         "Path", help="Path to subscribe to", nargs="+", completer=path_completer
     )
@@ -270,20 +271,20 @@ class TestClient(Cmd):
         action="store_true",
     )
 
-    ap_unsubscribe = argparse.ArgumentParser()
+    ap_unsubscribe = Cmd2ArgumentParser()
     ap_unsubscribe.add_argument(
         "SubscribeId",
         help="Corresponding subscription Id",
         completer=subscriptionIdCompleter,
     )
 
-    ap_getMetaData = argparse.ArgumentParser()
+    ap_getMetaData = Cmd2ArgumentParser()
     ap_getMetaData.add_argument(
         "Path",
         help="Path whose metadata is to be read",
         completer=path_completer,
     )
-    ap_updateMetaData = argparse.ArgumentParser()
+    ap_updateMetaData = Cmd2ArgumentParser()
     ap_updateMetaData.add_argument(
         "Path", help="Path whose MetaData is to update", completer=path_completer
     )
@@ -293,7 +294,7 @@ class TestClient(Cmd):
         " `updateVSSTree` instead.",
     )
 
-    ap_updateVSSTree = argparse.ArgumentParser()
+    ap_updateVSSTree = Cmd2ArgumentParser()
     jsonfile_completer_method = functools.partial(
         Cmd.path_complete,
         path_filter=lambda path: (os.path.isdir(path) or path.endswith(".json")),
@@ -653,7 +654,7 @@ def main():
     kuksa_logger = KuksaLogger()
     kuksa_logger.init_logging()
 
-    parser = argparse.ArgumentParser()
+    parser = Cmd2ArgumentParser()
     parser.add_argument(
         "server",
         nargs="?",
