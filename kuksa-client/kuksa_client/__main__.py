@@ -129,14 +129,13 @@ class TestClient(Cmd):
 
     def subscribeCallback(self, logPath, resp):
         if logPath is None:
-            with self.terminal_lock:
-                self.async_alert(
-                    highlight(
-                        json.dumps(json.loads(resp), indent=2),
-                        lexers.JsonLexer(),
-                        formatters.TerminalFormatter(),
-                    )
+            self.add_alert(
+                msg=highlight(
+                    json.dumps(json.loads(resp), indent=2),
+                    lexers.JsonLexer(),
+                    formatters.TerminalFormatter(),
                 )
+            )
         else:
             with logPath.open("a", encoding="utf-8") as logFile:
                 logFile.write(resp + "\n")
