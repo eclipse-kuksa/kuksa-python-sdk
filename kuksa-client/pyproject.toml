@@ -1,7 +1,8 @@
 [build-system]
 requires = [
     # Make sure to use the same exact version criteria in setup.cfg and update requirements.txt after changing
-    "grpcio-tools==1.68.0",
+    "grpcio-tools==1.82.1",
+    "protobuf>=7.35.1,<8.0.0",
     "setuptools>=77",
     "setuptools-git-versioning",
     "wheel",
