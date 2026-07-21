@@ -1836,63 +1836,76 @@ class TestVSSClient:
             ):
                 actual_responses.append(updates)
 
+            # Sort entries within each batch by path, because protobuf 7.x
+            # uses the upb backend which does not preserve insertion order
+            # for map fields like SubscribeResponse.entries.
+            actual_responses = [
+                sorted(batch, key=lambda e: e.entry.path)
+                for batch in actual_responses
+            ]
             assert actual_responses == [
-                [
-                    EntryUpdate(
-                        entry=DataEntry(
-                            path="Vehicle.Speed",
-                            value=Datapoint(
-                                value=42.0,
-                                timestamp=datetime.datetime(
-                                    2022,
-                                    11,
-                                    7,
-                                    16,
-                                    18,
-                                    35,
-                                    247307,
-                                    tzinfo=datetime.timezone.utc,
+                sorted(
+                    [
+                        EntryUpdate(
+                            entry=DataEntry(
+                                path="Vehicle.Speed",
+                                value=Datapoint(
+                                    value=42.0,
+                                    timestamp=datetime.datetime(
+                                        2022,
+                                        11,
+                                        7,
+                                        16,
+                                        18,
+                                        35,
+                                        247307,
+                                        tzinfo=datetime.timezone.utc,
+                                    ),
                                 ),
                             ),
+                            fields=[Field.VALUE],
                         ),
-                        fields=[Field.VALUE],
-                    ),
-                    EntryUpdate(
-                        entry=DataEntry(
-                            path="Vehicle.ADAS.ABS.IsActive",
-                            value=Datapoint(value=True),
+                        EntryUpdate(
+                            entry=DataEntry(
+                                path="Vehicle.ADAS.ABS.IsActive",
+                                value=Datapoint(value=True),
+                            ),
+                            fields=[Field.VALUE],
                         ),
-                        fields=[Field.VALUE],
-                    ),
-                ],
-                [
-                    EntryUpdate(
-                        entry=DataEntry(
-                            path="Vehicle.Speed",
-                            value=Datapoint(
-                                value=43.0,
-                                timestamp=datetime.datetime(
-                                    2022,
-                                    11,
-                                    7,
-                                    16,
-                                    18,
-                                    32,
-                                    247307,
-                                    tzinfo=datetime.timezone.utc,
+                    ],
+                    key=lambda e: e.entry.path,
+                ),
+                sorted(
+                    [
+                        EntryUpdate(
+                            entry=DataEntry(
+                                path="Vehicle.Speed",
+                                value=Datapoint(
+                                    value=43.0,
+                                    timestamp=datetime.datetime(
+                                        2022,
+                                        11,
+                                        7,
+                                        16,
+                                        18,
+                                        32,
+                                        247307,
+                                        tzinfo=datetime.timezone.utc,
+                                    ),
                                 ),
                             ),
+                            fields=[Field.VALUE],
                         ),
-                        fields=[Field.VALUE],
-                    ),
-                    EntryUpdate(
-                        entry=DataEntry(
-                            path="Vehicle.ADAS.ABS.IsActive",
-                            value=Datapoint(value=False),
+                        EntryUpdate(
+                            entry=DataEntry(
+                                path="Vehicle.ADAS.ABS.IsActive",
+                                value=Datapoint(value=False),
+                            ),
+                            fields=[Field.VALUE],
                         ),
-                        fields=[Field.VALUE],
-                    ),
-                ],
+                    ],
+                    key=lambda e: e.entry.path,
+                ),
             ]
 
     @pytest.mark.usefixtures("mocked_databroker")

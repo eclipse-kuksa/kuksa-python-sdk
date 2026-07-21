@@ -30,6 +30,8 @@ import uuid
 import os
 import logging
 
+import grpc
+
 from kuksa_client import cli_backend
 import kuksa_client.grpc
 import kuksa_client.grpc.aio
@@ -45,7 +47,7 @@ def callback_wrapper(callback: Callable[[str], None]) -> Callable[[Iterable[Entr
         try:
             callback(json.dumps([update.to_dict() for update in updates], cls=DatabrokerEncoder))
         except Exception as e:
-            logger.error("Callback could not be executed", e)
+            logger.error("Callback could not be executed: %s", e)
     return wrapper
 
 
@@ -196,8 +198,8 @@ class Backend(cli_backend.Backend):
                 for path in paths
             ]
             requestArgs = {
+                "paths": list(paths),
                 "entries": entries,
-                "try_v2": True,
                 "callback": callback_wrapper(callback),
             }
             return self._sendReceiveMsg(("subscribe", requestArgs), timeout)
@@ -261,9 +263,16 @@ class Backend(cli_backend.Backend):
                     resp = await vss_client.authorize(str(requestArgs["token"]))
                 elif call == "subscribe":
                     callback = requestArgs.pop('callback')
-                    subscriber_response_stream = vss_client.subscribe(
-                        **requestArgs)
-                    resp = await subscriber_manager.add_subscriber(subscriber_response_stream, callback)
+                    paths = requestArgs.pop('paths')
+                    entries = requestArgs.pop('entries')
+                    try:
+                        subscriber_response_stream = vss_client.v2_subscribe(paths=paths)
+                        resp = await subscriber_manager.add_subscriber(subscriber_response_stream, callback)
+                    except kuksa_client.grpc.VSSClientError as exc:
+                        if exc.error["code"] != grpc.StatusCode.UNIMPLEMENTED.value[0]:
+                            raise
+                        subscriber_response_stream = vss_client.subscribe(entries=entries)
+                        resp = await subscriber_manager.add_subscriber(subscriber_response_stream, callback)
                     resp = {"subscriptionId": str(resp)}
                 elif call == "unsubscribe":
                     resp = await subscriber_manager.remove_subscriber(**requestArgs)
