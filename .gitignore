@@ -2,6 +2,8 @@ log_*
 *_pb2*.py*
 venv
 **/.vssclient_history
+**/.kuksa_client_history
 **/__pycache__
 **/*.egg-info
 kuksa-client/dist
+kuksa-client/kuksa/

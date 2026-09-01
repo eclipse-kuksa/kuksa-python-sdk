@@ -23,6 +23,7 @@ import datetime
 import enum
 import logging
 import re
+import warnings
 from typing import Any
 from typing import Collection
 from typing import Dict
@@ -44,6 +45,12 @@ from kuksa.val.v2 import val_pb2 as val_v2
 from kuksa.val.v2 import val_pb2_grpc as val_grpc_v2
 
 logger = logging.getLogger(__name__)
+
+warnings.warn(
+    "kuksa_client.grpc is deprecated. Use the new kuksa_client.v2 API instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class DataType(enum.IntEnum):

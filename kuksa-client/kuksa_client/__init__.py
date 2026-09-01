@@ -20,6 +20,7 @@
 
 import asyncio
 import threading
+import warnings
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -32,6 +33,11 @@ class KuksaClientThread(threading.Thread):
 
     # Constructor
     def __init__(self, config):
+        warnings.warn(
+            "KuksaClientThread is deprecated. Use kuksa_client.v2.KuksaClient instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__()
 
         self.backend = cli_backend.Backend.from_config(config)

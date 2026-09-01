@@ -19,6 +19,7 @@
 import asyncio
 import contextlib
 import logging
+import warnings
 from typing import AsyncIterator
 from typing import Callable
 from typing import Collection
@@ -51,6 +52,12 @@ from . import View
 from . import VSSClientError
 
 logger = logging.getLogger(__name__)
+
+warnings.warn(
+    "kuksa_client.grpc.aio is deprecated. Use the new kuksa_client.v2.aio API instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class VSSClient(BaseVSSClient):

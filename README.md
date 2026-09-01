@@ -7,9 +7,15 @@ More about Eclipse KUKSA can be found in the [repository](https://github.com/ecl
 
 ## Introduction
 
-KUKSA Python SDK provides both a command-line interface (CLI) and a standalone library to interact with either
-[KUKSA Server](https://github.com/eclipse/kuksa.val/tree/master/kuksa-val-server) or
+KUKSA Python SDK provides both a command-line interface (CLI) and a standalone
+library to interact with the
 [KUKSA Databroker](https://github.com/eclipse-kuksa/kuksa-databroker).
+
+The redesigned `kuksa_client.v2` API targets the `kuksa.val.v2` protocol and
+offers both synchronous and asynchronous clients, plus a provider API. The
+older APIs (`kuksa_client.grpc`, `kuksa_client.grpc.aio`,
+`kuksa_client.KuksaClientThread`) are frozen and deprecated but remain
+available for backwards compatibility.
 
 ## Building and Installing the KUKSA Python SDK
 
@@ -29,10 +35,18 @@ After you have installed the kuksa-client package via pip you can run the test c
 kuksa-client
 ```
 
-With default CLI arguments, the client will try to connect to a local Databroker, e.g. a server supporting the `kuksa.val.v1` protocol without using TLS. This is equivalent to executing
+With default CLI arguments, the client will try to connect to a local Databroker supporting the `kuksa.val.v2` protocol without using TLS. This is equivalent to executing
 
 ```console
-kuksa-client grpc://127.0.0.1:55555
+kuksa-client --server grpc://127.0.0.1:55555
+```
+
+One-shot commands are also available:
+
+```console
+kuksa-client get Vehicle.Speed
+kuksa-client set Vehicle.Speed=42
+kuksa-client subscribe Vehicle.Speed
 ```
 
 More details on how to use the CLI is available in the KUKSA Python SDK [CLI documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/cli.md)
@@ -43,9 +57,18 @@ The KUKSA Python SDK CLI is available as a [prebuilt docker container](https://g
 
 ## Using KUKSA Python SDK as library
 
-The KUKSA Python SDK provides three APIS for connecting and communicating with [KUKSA Server](https://github.com/eclipse/kuksa.val/tree/master/kuksa-val-server)
-and [KUKSA Databroker](https://github.com/eclipse-kuksa/kuksa-databroker).
-For more details see the KUKSA Python SDK [Library documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/library.md).
+The KUKSA Python SDK provides a synchronous and an asynchronous client for the
+`kuksa.val.v2` protocol, plus a provider API. For more details see the KUKSA
+Python SDK [Library documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/library.md).
+
+```python
+from kuksa_client.v2 import KuksaClient
+
+with KuksaClient("127.0.0.1", 55555) as client:
+    speed = client.get("Vehicle.Speed")
+    print(speed.value)
+    client.set({"Vehicle.Speed": 42})
+```
 
 ## Contributing to KUKSA Python SDK
 

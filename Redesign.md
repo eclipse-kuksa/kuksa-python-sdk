@@ -63,12 +63,19 @@ with KuksaClient("127.0.0.1", 55555) as client:
     info = client.get_server_info()
 
 provider = Provider(client)
-provider.provide_signals({"Vehicle.Speed": DataType.FLOAT}) # claim signals
+provider.provide_signals({"Vehicle.Speed": None})           # claim signals (path -> min sample interval in ms, or None)
 provider.publish({"Vehicle.Speed": 42.5})                   # publish values (stream, high-frequency path)
 provider.provide_actuators(["Vehicle.Body.Wiper.Pos"])      # claim actuators
-for req in provider.actuation_requests():                   # receive actuation requests
+for req in provider.actuation_requests():                   # receive actuation requests (batches of ActuationRequest)
     provider.accept(req, ok=True, reason=None)
 ```
+
+> Note: `provide_signals` maps paths to a **minimum sample interval in milliseconds**
+> (or `None` for the databroker default), *not* to a `DataType` — `ProvideSignalRequest`
+> is `map<int32, SampleInterval>` and carries no data type. The signal's data type is
+> implicit in the broker's VSS tree. The path → id mapping (and type lookup for `publish`)
+> is resolved via the `MetadataStore`.
+
 Async mirrors this 1:1 with `await`/`async for` from `kuksa_client.v2.aio`.
 
 **Escape hatch:** `codec` exposes `to_proto_value`/`from_proto_value`, `client.raw_*` (or the stub) for raw v2 messages — providers and power users are not blocked.
@@ -144,3 +151,29 @@ Async mirrors this 1:1 with `await`/`async for` from `kuksa_client.v2.aio`.
 ## Open questions / next steps
 - Exact CLI one-shot command grammar.
 - Provider: which advanced `OpenProviderStream` features to expose in the first v2 SDK release (subscription `filters`/`UpdateFilterRequest`, on-demand `GetProviderValue`, and `ProviderErrorIndication`) vs. defer to the raw escape hatch.
+
+## TODO (potential next steps)
+
+### Provider / OpenProviderStream (not yet implemented)
+- **`GetProviderValue` request/response handling** — the broker may ask a provider for the
+  current value of a claimed signal; today such requests are logged and ignored.
+- **Subscription filters** — `UpdateFilterRequest` / `UpdateFilterResponse` (min sample
+  interval / duration per signal) are received on the provider stream but not exposed or
+  acted upon.
+- **`ProviderErrorIndication`** — sending provider-side error indications is not exposed.
+- **`PublishValuesResponse` error surfacing** — `publish()` is currently fire-and-forget;
+  per-signal publish errors are only logged, not raised or returned to the caller.
+- **`ActuateStream`** — the low-latency single-actuator streaming RPC is not surfaced.
+
+### Client
+- Batch `set` currently resolves types with one `ListMetadata(root=path)` per uncached
+  path; a common-prefix / whole-subtree warm could reduce first-call round-trips.
+- `get`/`set` do not yet expose per-call gRPC timeouts/metadata overrides.
+
+### CLI
+- Interactive shell: `unsubscribe` for subscriptions, richer tab-completion, and value
+  coercion parity with the legacy `setValue` string rules (escaped quotes, arrays).
+
+### Packaging / CI
+- Wire the new `tests/v2` suite into CI explicitly (it already runs under `pytest tests/`).
+- Consider an optional dockerized integration suite against a real databroker.

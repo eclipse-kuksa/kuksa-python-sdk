@@ -17,31 +17,31 @@
 # SPDX-License-Identifier: Apache-2.0
 ########################################################################
 
-import functools
+import argparse
 import json
-import logging.config
 import logging
 import os
 import pathlib
 import sys
 import threading
-import time
+from urllib.parse import urlparse
 
-from pygments import highlight
-from pygments import lexers
-from pygments import formatters
 from cmd2 import Cmd
 from cmd2 import Cmd2ArgumentParser
-from cmd2 import CompletionItem
-from cmd2 import Completions
 from cmd2 import with_argparser
 from cmd2 import with_category
 from cmd2 import constants
-from urllib.parse import urlparse
+from pygments import formatters
+from pygments import highlight
+from pygments import lexers
 
-from kuksa_client import KuksaClientThread
 from kuksa_client import _metadata
 from kuksa_client.kuksa_logger import KuksaLogger
+from kuksa_client.v2 import DataType
+from kuksa_client.v2 import EntryType
+from kuksa_client.v2 import KuksaClient
+from kuksa_client.v2 import KuksaError
+from kuksa_client.v2 import NotFound
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 
@@ -50,194 +50,171 @@ DEFAULT_TOKEN_OR_TOKENFILE = os.environ.get("TOKEN_OR_TOKENFILE", None)
 DEFAULT_CACERTIFICATE = os.environ.get("CACERTIFICATE", None)
 DEFAULT_TLS_SERVER_NAME = os.environ.get("TLS_SERVER_NAME", None)
 
-
 logger = logging.getLogger(__name__)
 
 
-def assignment_statement(arg):
-    path, value = arg.split("=", maxsplit=1)
-    return (path, value)
+# ---------------------------------------------------------------------------
+# Value coercion (CLI layer only)
+# ---------------------------------------------------------------------------
+
+_BOOL_TRUE = {"true", "t", "1", "yes", "on"}
+_BOOL_FALSE = {"false", "f", "0", "no", "off"}
+_INT_TYPES = {
+    DataType.INT8,
+    DataType.INT16,
+    DataType.INT32,
+    DataType.INT64,
+    DataType.UINT8,
+    DataType.UINT16,
+    DataType.UINT32,
+    DataType.UINT64,
+}
+_FLOAT_TYPES = {DataType.FLOAT, DataType.DOUBLE}
+_INT_ARRAYS = {
+    DataType.INT8_ARRAY,
+    DataType.INT16_ARRAY,
+    DataType.INT32_ARRAY,
+    DataType.INT64_ARRAY,
+    DataType.UINT8_ARRAY,
+    DataType.UINT16_ARRAY,
+    DataType.UINT32_ARRAY,
+    DataType.UINT64_ARRAY,
+}
+_FLOAT_ARRAYS = {DataType.FLOAT_ARRAY, DataType.DOUBLE_ARRAY}
 
 
-def display_completions(completions, delimiter):
-    # Index of what prefix to remove from displayed items
-    # I.e. "Vehicle." should be removed if the common prefix is "Vehicle.Ve".
-    prefix_idx = os.path.commonprefix(completions).rfind(delimiter) + 1
-    matches = []
-    for path in completions:
-        path = path[prefix_idx:]
-        # Only display completions up to (and including) the next delimiter.
-        next_dot = path.find(delimiter)
-        if next_dot != -1:
-            path = path[: next_dot + 1]
-        matches.append(path)
-    return matches
+def _parse_array(text, data_type):
+    stripped = text.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        stripped = stripped[1:-1]
+    items = [item.strip() for item in stripped.split(",") if item.strip() != ""]
+    if data_type == DataType.STRING_ARRAY:
+        def cast(s):
+            return s.strip("\"'")
+    elif data_type == DataType.BOOLEAN_ARRAY:
+        cast = _coerce_bool
+    elif data_type in _INT_ARRAYS:
+        cast = int
+    elif data_type in _FLOAT_ARRAYS:
+        cast = float
+    else:
+        cast = str
+    return [cast(item) for item in items]
 
 
-def metadata_tree_to_dict(tree):
-    def add_children(flattened_tree, path, value):
-        if "children" in value:
-            for child_path, value in value["children"].items():
-                add_children(flattened_tree, f"{path}.{child_path}", value)
-        else:
-            flattened_tree[path] = value
-
-    flattened_tree = {}
-
-    for key, value in tree.items():
-        add_children(flattened_tree, key, value)
-
-    return flattened_tree
+def _coerce_bool(text):
+    lowered = text.strip().lower()
+    if lowered in _BOOL_TRUE:
+        return True
+    if lowered in _BOOL_FALSE:
+        return False
+    raise ValueError(f"Invalid boolean value: {text}")
 
 
-# pylint: disable=too-many-instance-attributes
-# pylint: disable=too-many-public-methods
-class TestClient(Cmd):
-    def refresh_metadata(self):
-        if self.server.startswith("grpc"):
-            entries = json.loads(self.getMetaData("**"))
-            if "error" in entries:
-                raise Exception("Wrong databroker version, please use a newer version")
-            # Convert to dict with paths as key
-            self.metadata = {entry["path"]: entry for entry in entries}
-        else:
-            entries = json.loads(self.getMetaData(""))
-            if "metadata" in entries:
-                # Convert to dict with paths as key
-                self.metadata = metadata_tree_to_dict(entries["metadata"])
+def coerce_value(text, data_type):
+    if data_type is None or data_type == DataType.UNSPECIFIED:
+        return text
+    if data_type == DataType.BOOLEAN:
+        return _coerce_bool(text)
+    if data_type in _FLOAT_TYPES:
+        return float(text)
+    if data_type in _INT_TYPES:
+        return int(text)
+    if data_type.name.endswith("_ARRAY"):
+        return _parse_array(text, data_type)
+    return text
 
-    def path_completer(self, text, line, begidx, endidx):
-        if not self.connection_established():
-            return Completions()
 
-        if len(self.pathCompletionItems) == 0:
-            self.refresh_metadata()
+def coerce_assignments(client, assignments):
+    """
+    Coerce ``Path=Value`` assignment strings into a ``{path: native value}``
+    mapping using each signal's data type.
+    """
+    updates = {}
+    for assignment in assignments:
+        if "=" not in assignment:
+            raise KuksaError(f"Invalid assignment: {assignment} (expected Path=Value)")
+        path, value = assignment.split("=", maxsplit=1)
+        data_type = client.get_metadata(path).data_type
+        updates[path] = coerce_value(value, data_type)
+    return updates
 
-        delimiter = "."
-        if "/" in text:
-            delimiter = "/"
-            text = text.replace(delimiter, ".")
 
-        self.pathCompletionItems = []
-        for path in self.metadata.keys():
-            if path.lower().startswith(text.lower()):
-                if delimiter != ".":
-                    path = path.replace(".", delimiter)
-                self.pathCompletionItems.append(CompletionItem(path))
+# ---------------------------------------------------------------------------
+# Path completion (interactive shell)
+# ---------------------------------------------------------------------------
 
-        return self.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
+def _matching_paths(shell, text):
+    if shell.client is None:
+        return []
+    if not shell._completion_paths:
+        try:
+            shell._completion_paths = shell.client.expand("")
+        except KuksaError:
+            return []
+    lowered = text.lower()
+    return [
+        path for path in shell._completion_paths if path.lower().startswith(lowered)
+    ]
 
-    def subscribeCallback(self, logPath, resp):
-        if logPath is None:
-            self.add_alert(
-                msg=highlight(
-                    json.dumps(json.loads(resp), indent=2),
-                    lexers.JsonLexer(),
-                    formatters.TerminalFormatter(),
-                )
-            )
-        else:
-            with logPath.open("a", encoding="utf-8") as logFile:
-                logFile.write(resp + "\n")
 
-    def subscriptionIdCompleter(self, text, line, begidx, endidx):
-        self.pathCompletionItems = []
-        for sub_id in self.subscribeIds:
-            self.pathCompletionItems.append(CompletionItem(sub_id))
-        return self.basic_complete(text, line, begidx, endidx, self.pathCompletionItems)
+def path_completer(shell, text, line, begidx, endidx):
+    """Complete VSS signal paths (e.g. ``get Vehicle.S<tab>``)."""
+    return shell.basic_complete(
+        text, line, begidx, endidx, _matching_paths(shell, text)
+    )
 
+
+def set_completer(shell, text, line, begidx, endidx):
+    """Complete the path portion of a ``Path=Value`` argument."""
+    if "=" in text:
+        path_part = text.split("=", maxsplit=1)[0]
+        endidx = begidx + len(path_part)
+        return shell.basic_complete(
+            path_part, line, begidx, endidx, _matching_paths(shell, path_part)
+        )
+    return shell.basic_complete(
+        text, line, begidx, endidx, _matching_paths(shell, text)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Interactive shell
+# ---------------------------------------------------------------------------
+
+class KuksaShell(Cmd):
     COMM_SETUP_COMMANDS = "Communication Set-up Commands"
-    VSS_COMMANDS = "Kuksa Interaction Commands (Supported by both KUKSA Databroker and KUKSA Server)"
-    VSS_COMMANDS_SERVER = "Kuksa Interaction Commands (Only supported by KUKSA Server)"
+    VSS_COMMANDS = "Kuksa Interaction Commands"
     INFO_COMMANDS = "Info Commands"
 
     ap_connect = Cmd2ArgumentParser()
     ap_connect.add_argument(
         "server",
-        help=f"VSS server to connect to. Format: protocol://host[:port]. \
-        Supported protocols: [grpc, grpcs, ws, wss]. Example: {DEFAULT_KUKSA_ADDRESS}",
+        help="Databroker to connect to. Format: grpc://host[:port] or grpcs://host[:port].",
     )
 
-    ap_disconnect = Cmd2ArgumentParser()
     ap_authorize = Cmd2ArgumentParser()
-    tokenfile_completer_method = functools.partial(
-        Cmd.path_complete,
-        path_filter=lambda path: (os.path.isdir(path) or path.endswith(".token")),
-    )
-    ap_authorize.add_argument(
-        "token_or_tokenfile",
-        help="JWT(or the file storing the token) for authorizing the client.",
-        completer=tokenfile_completer_method,
+    ap_authorize.add_argument("token", help="JWT token or path to a .token file")
+
+    ap_get = Cmd2ArgumentParser()
+    ap_get.add_argument(
+        "Path", help="Path whose value is to be read", nargs="+", completer=path_completer
     )
 
-    ap_setValue = Cmd2ArgumentParser()
-    ap_setValue.add_argument(
-        "Path", help="Path to be set", completer=path_completer
-    )
-    ap_setValue.add_argument("Value", nargs="+", help="Value to be set")
-    ap_setValue.add_argument(
-        "-a", "--attribute", help="Attribute to be set", default="value"
-    )
-
-    ap_setValues = Cmd2ArgumentParser()
-    ap_setValues.add_argument(
+    ap_set = Cmd2ArgumentParser()
+    ap_set.add_argument(
         "Path=Value",
-        help="Path and new value this path is to be set with",
+        help="Path and new value, e.g. Vehicle.Speed=42",
         nargs="+",
-        type=assignment_statement,
-    )
-    ap_setValues.add_argument(
-        "-a", "--attribute", help="Attribute to be set", default="value"
+        completer=set_completer,
     )
 
-    ap_getValue = Cmd2ArgumentParser()
-    ap_getValue.add_argument(
-        "Path", help="Path to be read", completer=path_completer
-    )
-    ap_getValue.add_argument(
-        "-a", "--attribute", help="Attribute to be get", default="value"
-    )
-
-    ap_getValues = Cmd2ArgumentParser()
-    ap_getValues.add_argument(
-        "Path",
-        help="Path whose value is to be read",
-        nargs="+",
-        completer=path_completer,
-    )
-    ap_getValues.add_argument(
-        "-a", "--attribute", help="Attribute to be get", default="value"
-    )
-
-    ap_setTargetValue = Cmd2ArgumentParser()
-    ap_setTargetValue.add_argument(
-        "Path",
-        help="Path whose target value to be set",
-        completer=path_completer,
-    )
-    ap_setTargetValue.add_argument("Value", help="Value to be set")
-
-    ap_setTargetValues = Cmd2ArgumentParser()
-    ap_setTargetValues.add_argument(
+    ap_actuate = Cmd2ArgumentParser()
+    ap_actuate.add_argument(
         "Path=Value",
-        help="Path and new target value this path is to be set with",
+        help="Path and target value, e.g. Vehicle.Body.Wiper.Pos=45",
         nargs="+",
-        type=assignment_statement,
-    )
-
-    ap_getTargetValue = Cmd2ArgumentParser()
-    ap_getTargetValue.add_argument(
-        "Path",
-        help="Path whose target value is to be read",
-        completer=path_completer,
-    )
-
-    ap_getTargetValues = Cmd2ArgumentParser()
-    ap_getTargetValues.add_argument(
-        "Path",
-        help="Path whose target value is to be read",
-        nargs="+",
-        completer=path_completer,
+        completer=set_completer,
     )
 
     ap_subscribe = Cmd2ArgumentParser()
@@ -245,349 +222,279 @@ class TestClient(Cmd):
         "Path", help="Path to subscribe to", nargs="+", completer=path_completer
     )
     ap_subscribe.add_argument(
-        "-a", "--attribute", help="Attribute to subscribe to", default="value"
-    )
-
-    ap_subscribe.add_argument(
-        "-f",
-        "--output-to-file",
-        help="Redirect the subscription output to file",
+        "-b",
+        "--background",
         action="store_true",
+        help="Subscribe in the background and print updates as alerts",
     )
 
-    ap_unsubscribe = Cmd2ArgumentParser()
-    ap_unsubscribe.add_argument(
-        "SubscribeId",
-        help="Corresponding subscription Id",
-        completer=subscriptionIdCompleter,
+    ap_get_metadata = Cmd2ArgumentParser()
+    ap_get_metadata.add_argument(
+        "Path", help="Path whose metadata is to be read", completer=path_completer
     )
 
-    ap_getMetaData = Cmd2ArgumentParser()
-    ap_getMetaData.add_argument(
-        "Path",
-        help="Path whose metadata is to be read",
-        completer=path_completer,
-    )
-    ap_updateMetaData = Cmd2ArgumentParser()
-    ap_updateMetaData.add_argument(
-        "Path", help="Path whose MetaData is to update", completer=path_completer
-    )
-    ap_updateMetaData.add_argument(
-        "Json",
-        help="MetaData to update. Note, only attributes can be update, if update children or the whole vss tree, use"
-        " `updateVSSTree` instead.",
+    ap_list_metadata = Cmd2ArgumentParser()
+    ap_list_metadata.add_argument(
+        "Pattern", help="Exact path or wildcard pattern", completer=path_completer
     )
 
-    ap_updateVSSTree = Cmd2ArgumentParser()
-    jsonfile_completer_method = functools.partial(
-        Cmd.path_complete,
-        path_filter=lambda path: (os.path.isdir(path) or path.endswith(".json")),
-    )
-    ap_updateVSSTree.add_argument(
-        "Json",
-        help="Json tree to update VSS",
-        completer=jsonfile_completer_method,
+    ap_expand = Cmd2ArgumentParser()
+    ap_expand.add_argument("Pattern", help="Wildcard pattern", completer=path_completer)
+    ap_expand.add_argument(
+        "-t",
+        "--entry-type",
+        choices=[e.name for e in EntryType],
+        default=None,
+        help="Only list signals of this entry type",
     )
 
-    # Constructor, request names after protocol to avoid errors
-    def __init__(
-        self,
-        server=None,
-        token_or_tokenfile=None,
-        cacertificate=None,
-        tls_server_name=None,
-    ):
+    ap_has_signal = Cmd2ArgumentParser()
+    ap_has_signal.add_argument("Path", help="Path to check", completer=path_completer)
+
+    def __init__(self, server, token_or_tokenfile=None, cacertificate=None, tls_server_name=None):
         shortcuts = constants.DEFAULT_SHORTCUTS
         shortcuts.update({"exit": "quit"})
         super().__init__(
-            persistent_history_file=".vssclient_history",
+            persistent_history_file=".kuksa_client_history",
             persistent_history_length=100,
             shortcuts=shortcuts,
             allow_cli_args=False,
         )
-
-        self.prompt = "Test Client> "
-        self.max_completion_items = 20
-        self.server = server or DEFAULT_KUKSA_ADDRESS
-
-        self.metadata = {}
-        self.pathCompletionItems = []
-        self.subscribeIds = set()
-        self.commThread = None
+        self.prompt = "Kuksa Client> "
+        self.server = server
         self.token_or_tokenfile = token_or_tokenfile
         self.cacertificate = cacertificate
         self.tls_server_name = tls_server_name
+        self.client = None
+        self._completion_paths = []
+        self._subscribe_threads = []
 
-        with (pathlib.Path(scriptDir) / "logo").open("r", encoding="utf-8") as f:
-            logo = f.read()
-            print(logo.replace("%ver%", str(_metadata.__version__)))
-
+        with (pathlib.Path(scriptDir) / "logo").open("r", encoding="utf-8") as logo_file:
+            print(logo_file.read().replace("%ver%", str(_metadata.__version__)))
         print()
         self.connect()
 
-    @with_category(COMM_SETUP_COMMANDS)
-    @with_argparser(ap_authorize)
-    def do_authorize(self, args):
-        """Authorize the client to interact with the server"""
-        if args.token_or_tokenfile is not None:
-            self.token_or_tokenfile = args.token_or_tokenfile
-        if self.connection_established():
-            resp = self.commThread.authorize(self.token_or_tokenfile)
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
+    # ------------------------------------------------------------------
+    def _load_token(self, token_or_tokenfile):
+        if token_or_tokenfile is None:
+            return None
+        path = pathlib.Path(token_or_tokenfile)
+        if path.is_file():
+            return path.expanduser().read_text(encoding="utf-8").rstrip("\n")
+        return token_or_tokenfile
 
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_setValue)
-    def do_setValue(self, args):
-        """Set the value of a path"""
-        if self.connection_established():
-            # If there is a blank before a single/double quote on the kuksa-client cli then
-            # the argparser shell will remove it, there is nothing we can do to it
-            # This gives off behavior for examples like:
-            # setValue Vehicle.OBD.DTCList [ "dtc1, dtc2", ddd]
-            # which will be treated as input of 3 elements
-            # The recommended approach is to have quotes (of a different type) around the whole value
-            # if your strings includes quotes, commas or other items
-            # setValue Vehicle.OBD.DTCList '[ "dtc1, dtc2", ddd]'
-            # or
-            # setValue Vehicle.OBD.DTCList "[ 'dtc1, dtc2', ddd]"
-            # If you really need to include a quote in the values use backslash and use the quote type
-            # you want as inner value:
-            # setValue Vehicle.OBD.DTCList "[ 'dtc1, \'dtc2', ddd]"
-            # Will result in two elements in the array; "dtc1, 'dtc2" and "ddd"
-            value = str(" ".join(args.Value))
-            resp = self.commThread.setValue(args.Path, value, args.attribute)
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_setValues)
-    def do_setValues(self, args):
-        """Set the value of given paths"""
-        if self.connection_established():
-            resp = self.commThread.setValues(
-                dict(getattr(args, "Path=Value")), args.attribute
-            )
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_setTargetValue)
-    def do_setTargetValue(self, args):
-        """Set the target value of a path"""
-        if self.connection_established():
-            resp = self.commThread.setValue(args.Path, args.Value, "targetValue")
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_setTargetValues)
-    def do_setTargetValues(self, args):
-        """Set the target value of given paths"""
-        if self.connection_established():
-            resp = self.commThread.setValues(
-                dict(getattr(args, "Path=Value")), "targetValue"
-            )
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_getValue)
-    def do_getValue(self, args):
-        """Get the value of a path"""
-        if self.connection_established():
-            resp = self.commThread.getValue(args.Path, args.attribute)
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_getValues)
-    def do_getValues(self, args):
-        """Get the value of given paths"""
-        if self.connection_established():
-            resp = self.commThread.getValues(args.Path, args.attribute)
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_getTargetValue)
-    def do_getTargetValue(self, args):
-        """Get the value of a path"""
-        if self.connection_established():
-            resp = self.commThread.getValue(args.Path, "targetValue")
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_getTargetValues)
-    def do_getTargetValues(self, args):
-        """Get the value of given paths"""
-        if self.connection_established():
-            resp = self.commThread.getValues(args.Path, "targetValue")
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_subscribe)
-    def do_subscribe(self, args):
-        """Subscribe to updates of given paths"""
-        if self.connection_established():
-            if args.output_to_file:
-                logPath = (
-                    pathlib.Path.cwd()
-                    / f"log_{'_'.join(args.Path).replace('/', '.')}_{args.attribute}_{str(time.time())}"
-                )
-                callback = functools.partial(self.subscribeCallback, logPath)
-            else:
-                callback = functools.partial(self.subscribeCallback, None)
-
-            resp = self.commThread.subscribeMultiple(args.Path, callback, args.attribute)
-            resJson = json.loads(resp)
-            if "subscriptionId" in resJson:
-                self.subscribeIds.add(resJson["subscriptionId"])
-                if args.output_to_file:
-                    logPath.touch()
-                    print(f"Subscription log available at {logPath}")
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_unsubscribe)
-    def do_unsubscribe(self, args):
-        """Unsubscribe an existing subscription"""
-        if self.connection_established():
-            resp = self.commThread.unsubscribe(args.SubscribeId)
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-            self.subscribeIds.discard(args.SubscribeId)
-            self.pathCompletionItems = []
-
-    def stop(self):
-        if self.commThread is not None:
-            self.commThread.stop()
-            self.commThread.join()
-
-    def getMetaData(self, path):
-        """Get MetaData of the path"""
-        if self.connection_established():
-            return self.commThread.getMetaData(path)
-        return "{}"
-
-    @with_category(VSS_COMMANDS_SERVER)
-    @with_argparser(ap_updateVSSTree)
-    def do_updateVSSTree(self, args):
-        """Update VSS Tree Entry"""
-        if self.connection_established():
-            resp = self.commThread.updateVSSTree(args.Json)
-            if resp is not None:
-                print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_updateMetaData)
-    def do_updateMetaData(self, args):
-        """Update MetaData of a given path"""
-        if self.connection_established():
-            resp = self.commThread.updateMetaData(args.Path, args.Json)
-            print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-
-    @with_category(VSS_COMMANDS)
-    @with_argparser(ap_getMetaData)
-    def do_getMetaData(self, args):
-        """Get MetaData of the path"""
-        resp = self.getMetaData(args.Path)
-        print(highlight(resp, lexers.JsonLexer(), formatters.TerminalFormatter()))
-        self.pathCompletionItems = []
-
-    @with_category(COMM_SETUP_COMMANDS)
-    @with_argparser(ap_disconnect)
-    def do_disconnect(self, _args):
-        """Disconnect from the VISS/gRPC Server"""
-        if hasattr(self, "commThread"):
-            if self.commThread is not None:
-                self.commThread.stop()
-                self.commThread = None
-
-    def connection_established(self) -> bool:
-        """
-        Check if thread has established a connection to the broker/server.
-        Note that this method does not indicate the current state of the connection,
-        This method may return True even if the broker/server currently is not reachable.
-        """
-        if self.commThread is None or not self.commThread.connection_established():
-            self.connect()
-        return self.commThread.connection_established()
-
-    def connect(self):
-        """Connect to the VISS/gRPC Server"""
-        if hasattr(self, "commThread"):
-            if self.commThread is not None:
-                self.commThread.stop()
-                self.commThread = None
-
-        # Check we have a valid server URI
+    def _connect_kwargs(self):
         srv = urlparse(self.server)
-        config = {"port": 55555, "insecure": True}
-
-        if srv.scheme in ["grpc", "grpcs"]:
-            config["protocol"] = "grpc"
-        elif srv.scheme in ["ws", "wss"]:
-            config["protocol"] = "ws"
-            config["port"] = 8090
-        else:
-            print(f"Invalid server URI. Unsupported protocol: {srv.scheme} ")
-            return
-
-        if srv.port is not None:
-            config["port"] = srv.port
-
-        if srv.scheme in ["grpcs", "wss"]:
+        host = srv.hostname or "127.0.0.1"
+        port = srv.port or 55555
+        kwargs = {
+            "host": host,
+            "port": port,
+            "tls_server_name": self.tls_server_name,
+        }
+        token = self._load_token(self.token_or_tokenfile)
+        if token:
+            kwargs["token"] = token
+        if srv.scheme in ("grpcs",):
             if self.cacertificate is None:
-                print("TLS cannot be used as no CA Certificate specifed!")
-            else:
-                config["insecure"] = False
+                print("TLS cannot be used as no CA Certificate was specified!")
+                return None
+            kwargs["root_certificates"] = pathlib.Path(self.cacertificate)
+        return kwargs
 
-        if srv.hostname is None:
-            print("No hostname or IP given")
+    def _require_client(self):
+        if self.client is None:
+            self.connect()
+        if self.client is None:
+            raise KuksaError("Not connected to a databroker")
+        return self.client
+
+    # ------------------------------------------------------------------
+    def connect(self):
+        if self.client is not None:
+            self.client.disconnect()
+            self.client = None
+        self._completion_paths = []
+        kwargs = self._connect_kwargs()
+        if kwargs is None:
             return
+        print(f"Connecting to databroker at {kwargs['host']} port {kwargs['port']}...")
+        self.client = KuksaClient(**kwargs)
+        self.client.connect()
+        try:
+            info = self.client.get_server_info()
+            print(f"Connected to {info.name} version {info.version}")
+        except KuksaError as exc:
+            print(f"Connected (server info unavailable: {exc})")
 
-        config["ip"] = srv.hostname
-
-        # Explain were we are connecting to:
+    def _print_json(self, obj):
         print(
-            f"Connecting to VSS server at {config['ip']} port {config['port']} \
-using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS'} protocol."
-        )
-        print(f"TLS will {'not be' if config['insecure'] else 'be'} used.")
-
-        # Configs should only be added if they actually have a value
-        if self.token_or_tokenfile is not None:
-            config["token_or_tokenfile"] = self.token_or_tokenfile
-        if self.cacertificate is not None:
-            config["cacertificate"] = self.cacertificate
-        if self.tls_server_name is not None:
-            config["tls_server_name"] = self.tls_server_name
-
-        self.commThread = KuksaClientThread(config)
-        self.commThread.start()
-
-        waitForConnection = threading.Condition()
-        waitForConnection.acquire()
-        waitForConnection.wait_for(self.commThread.connection_established, timeout=1)
-        waitForConnection.release()
-
-        if self.commThread.connection_established():
-            pass
-        else:
-            print(
-                "Error: Websocket could not be connected or the gRPC channel could not be created."
+            highlight(
+                json.dumps(obj, indent=2, default=str),
+                lexers.JsonLexer(),
+                formatters.TerminalFormatter(),
             )
-            self.commThread.stop()
-            self.commThread = None
+        )
+
+    def _stop_subscriptions(self):
+        for thread in self._subscribe_threads:
+            thread.join(timeout=1)
+        self._subscribe_threads = []
 
     @with_category(COMM_SETUP_COMMANDS)
     @with_argparser(ap_connect)
     def do_connect(self, args):
-        """Connect to a VSS server"""
+        """Connect to a databroker"""
         self.server = args.server
         self.connect()
+
+    @with_category(COMM_SETUP_COMMANDS)
+    def do_disconnect(self, _args):
+        """Disconnect from the databroker"""
+        if self.client is not None:
+            self.client.disconnect()
+            self.client = None
+        self._completion_paths = []
+        self._stop_subscriptions()
+
+    @with_category(COMM_SETUP_COMMANDS)
+    @with_argparser(ap_authorize)
+    def do_authorize(self, args):
+        """Authorize the client with a JWT token"""
+        token = self._load_token(args.token)
+        client = self._require_client()
+        client.authorize(token)
+        print("Authenticated")
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_get)
+    def do_get(self, args):
+        """Get the value of one or more paths"""
+        client = self._require_client()
+        try:
+            result = client.get(args.Path if len(args.Path) > 1 else args.Path[0])
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+            return
+        if isinstance(result, dict):
+            self._print_json({path: dp.value for path, dp in result.items()})
+        else:
+            self._print_json({"value": result.value, "timestamp": result.timestamp})
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_set)
+    def do_set(self, args):
+        """Set the value of one or more paths"""
+        client = self._require_client()
+        try:
+            updates = coerce_assignments(client, getattr(args, "Path=Value"))
+        except (KuksaError, ValueError) as exc:
+            print(f"Error: {exc}")
+            return
+        try:
+            client.set(updates)
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_actuate)
+    def do_actuate(self, args):
+        """Actuate one or more actuators (target values)"""
+        client = self._require_client()
+        try:
+            updates = coerce_assignments(client, getattr(args, "Path=Value"))
+        except (KuksaError, ValueError) as exc:
+            print(f"Error: {exc}")
+            return
+        try:
+            client.actuate(updates)
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_subscribe)
+    def do_subscribe(self, args):
+        """Subscribe to updates of one or more paths"""
+        client = self._require_client()
+        if args.background:
+            thread = threading.Thread(
+                target=self._subscribe_background,
+                args=(client, args.Path),
+                daemon=True,
+            )
+            self._subscribe_threads.append(thread)
+            thread.start()
+            print(f"Subscribed to {', '.join(args.Path)} (background)")
+            return
+        try:
+            for updates in client.subscribe(args.Path):
+                self._print_json({path: dp.value for path, dp in updates.items()})
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+
+    def _subscribe_background(self, client, paths):
+        try:
+            for updates in client.subscribe(paths):
+                message = highlight(
+                    json.dumps(
+                        {path: dp.value for path, dp in updates.items()},
+                        indent=2,
+                        default=str,
+                    ),
+                    lexers.JsonLexer(),
+                    formatters.TerminalFormatter(),
+                )
+                self.add_alert(msg=message)
+        except KuksaError as exc:
+            if client.connected:
+                self.add_alert(msg=f"Subscription error: {exc}")
+        except Exception:
+            # The stream was terminated, e.g. by a disconnect.
+            pass
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_get_metadata)
+    def do_get_metadata(self, args):
+        """Get the metadata of a path"""
+        client = self._require_client()
+        try:
+            metadata = client.get_metadata(args.Path)
+            self._print_json(_metadata_to_dict(metadata))
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_list_metadata)
+    def do_list_metadata(self, args):
+        """List metadata of signals matching a pattern"""
+        client = self._require_client()
+        try:
+            metadatas = client.list_metadata(args.Pattern)
+            self._print_json([_metadata_to_dict(m) for m in metadatas])
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_expand)
+    def do_expand(self, args):
+        """Expand a wildcard pattern into concrete signal paths"""
+        client = self._require_client()
+        try:
+            entry_type = EntryType[args.entry_type] if args.entry_type else None
+            paths = client.expand(args.Pattern, entry_type=entry_type)
+            self._print_json(paths)
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_has_signal)
+    def do_has_signal(self, args):
+        """Check whether a signal exists"""
+        client = self._require_client()
+        try:
+            print(client.has_signal(args.Path))
+        except KuksaError as exc:
+            print(f"Error: {exc}")
 
     @with_category(INFO_COMMANDS)
     def do_info(self, _args):
@@ -599,64 +506,164 @@ using {'KUKSA GRPC' if config['protocol'] == 'grpc' else 'VISS'} protocol."
 
     @with_category(INFO_COMMANDS)
     def do_version(self, _args):
-        """Show version of the client"""
+        """Show the client version"""
         print(_metadata.__version__)
 
+    def stop(self):
+        if self.client is not None:
+            self.client.disconnect()
+            self.client = None
+        self._stop_subscriptions()
 
-# pylint: enable=too-many-public-methods
-# pylint: enable=too-many-instance-attributes
 
-# Main Function
+def _metadata_to_dict(metadata):
+    result = {
+        "path": metadata.path,
+        "data_type": metadata.data_type.name,
+        "entry_type": metadata.entry_type.name,
+    }
+    for field in ("description", "comment", "deprecation", "unit"):
+        value = getattr(metadata, field, None)
+        if value is not None:
+            result[field] = value
+    if metadata.value_restriction is not None:
+        result["value_restriction"] = {
+            "min": metadata.value_restriction.min,
+            "max": metadata.value_restriction.max,
+            "allowed_values": metadata.value_restriction.allowed_values,
+        }
+    return result
+
+
+# ---------------------------------------------------------------------------
+# One-shot commands
+# ---------------------------------------------------------------------------
+
+def _build_one_shot_parser():
+    parser = argparse.ArgumentParser(prog="kuksa-client", description="KUKSA Databroker client")
+    parser.add_argument(
+        "--server",
+        default=DEFAULT_KUKSA_ADDRESS,
+        help="Databroker to connect to. Format: grpc://host[:port] or grpcs://host[:port].",
+    )
+    parser.add_argument("--token", default=DEFAULT_TOKEN_OR_TOKENFILE, help="JWT token or path to a .token file")
+    parser.add_argument("--cacertificate", default=DEFAULT_CACERTIFICATE, help="Client root cert file (.pem)")
+    parser.add_argument("--tls-server-name", default=DEFAULT_TLS_SERVER_NAME, help="CA name of the server")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    p_get = subparsers.add_parser("get", help="Get the value of one or more paths")
+    p_get.add_argument("paths", nargs="+")
+
+    p_set = subparsers.add_parser("set", help="Set values, e.g. Vehicle.Speed=42")
+    p_set.add_argument("assignments", nargs="+", help="Path=Value pairs")
+
+    p_act = subparsers.add_parser("actuate", help="Actuate actuators, e.g. Vehicle.Body.Wiper.Pos=45")
+    p_act.add_argument("assignments", nargs="+", help="Path=Value pairs")
+
+    p_sub = subparsers.add_parser("subscribe", help="Subscribe to one or more paths")
+    p_sub.add_argument("paths", nargs="+")
+
+    p_md = subparsers.add_parser("get-metadata", help="Get the metadata of a path")
+    p_md.add_argument("path")
+
+    p_lmd = subparsers.add_parser("list-metadata", help="List metadata matching a pattern")
+    p_lmd.add_argument("pattern")
+
+    p_exp = subparsers.add_parser("expand", help="Expand a wildcard pattern into paths")
+    p_exp.add_argument("pattern")
+
+    p_has = subparsers.add_parser("has-signal", help="Check whether a signal exists")
+    p_has.add_argument("path")
+
+    subparsers.add_parser("server-info", help="Show databroker info")
+
+    return parser
+
+
+def _open_client(args):
+    srv = urlparse(args.server)
+    host = srv.hostname or "127.0.0.1"
+    port = srv.port or 55555
+    kwargs = {"host": host, "port": port, "tls_server_name": args.tls_server_name}
+    token = args.token
+    if token and pathlib.Path(token).is_file():
+        token = pathlib.Path(token).read_text(encoding="utf-8").rstrip("\n")
+    if token:
+        kwargs["token"] = token
+    if srv.scheme == "grpcs":
+        if args.cacertificate is None:
+            raise KuksaError("TLS cannot be used as no CA Certificate was specified!")
+        kwargs["root_certificates"] = pathlib.Path(args.cacertificate)
+    return KuksaClient(**kwargs)
+
+
+def _run_one_shot(args):
+    client = _open_client(args)
+    try:
+        with client:
+            command = args.command
+            if command == "get":
+                paths = args.paths
+                result = client.get(paths if len(paths) > 1 else paths[0])
+                if isinstance(result, dict):
+                    print(json.dumps({p: dp.value for p, dp in result.items()}, indent=2, default=str))
+                else:
+                    print(json.dumps({"value": result.value, "timestamp": result.timestamp}, indent=2, default=str))
+            elif command == "set":
+                client.set(coerce_assignments(client, args.assignments))
+            elif command == "actuate":
+                client.actuate(coerce_assignments(client, args.assignments))
+            elif command == "subscribe":
+                for updates in client.subscribe(args.paths):
+                    print(json.dumps({p: dp.value for p, dp in updates.items()}, default=str))
+            elif command == "get-metadata":
+                print(json.dumps(_metadata_to_dict(client.get_metadata(args.path)), indent=2))
+            elif command == "list-metadata":
+                print(json.dumps([_metadata_to_dict(m) for m in client.list_metadata(args.pattern)], indent=2))
+            elif command == "expand":
+                print("\n".join(client.expand(args.pattern)))
+            elif command == "has-signal":
+                print(client.has_signal(args.path))
+            elif command == "server-info":
+                info = client.get_server_info()
+                print(
+                    json.dumps(
+                        {
+                            "name": info.name,
+                            "version": info.version,
+                            "commit_hash": info.commit_hash,
+                        },
+                        indent=2,
+                    )
+                )
+    except (KuksaError, NotFound, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
 
 def main():
-
     kuksa_logger = KuksaLogger()
     kuksa_logger.init_logging()
 
-    parser = Cmd2ArgumentParser()
-    parser.add_argument(
-        "server",
-        nargs="?",
-        help=f"VSS server to connect to. Format: protocol://host[:port]. \
-        Supported protocols: [grpc, grpcs, ws, wss]. Example: {DEFAULT_KUKSA_ADDRESS}",
-        default=DEFAULT_KUKSA_ADDRESS,
-    )
-    parser.add_argument(
-        "--token_or_tokenfile",
-        default=DEFAULT_TOKEN_OR_TOKENFILE,
-        help="JWT token or path to a JWT token file (.token)",
-    )
-
-    # Add TLS arguments
-    parser.add_argument(
-        "--cacertificate",
-        default=DEFAULT_CACERTIFICATE,
-        help="Client root cert file (.pem). \
-        Needed for TLS enabled transports (grpcs, wss)",
-    )
-    # Observations for Python
-    # Connecting to "localhost" works well, subjectAltName seems to suffice
-    # Connecting to "127.0.0.1" does not work unless server-name specified
-    # For KUKSA.val example certs default name is "Server"
-    parser.add_argument(
-        "--tls-server-name",
-        default=DEFAULT_TLS_SERVER_NAME,
-        help="CA name of server, needed in some cases where subjectAltName does not suffice",
-    )
-
+    parser = _build_one_shot_parser()
     args = parser.parse_args()
 
-    clientApp = TestClient(
+    if args.command:
+        return _run_one_shot(args)
+
+    shell = KuksaShell(
         args.server,
-        token_or_tokenfile=args.token_or_tokenfile,
+        token_or_tokenfile=args.token,
         cacertificate=args.cacertificate,
         tls_server_name=args.tls_server_name,
     )
     try:
-        # We exit the loop when the user types "quit" or hits Ctrl-D.
-        clientApp.cmdloop()
+        shell.cmdloop()
     finally:
-        clientApp.stop()
+        shell.stop()
+    return 0
 
 
 if __name__ == "__main__":
