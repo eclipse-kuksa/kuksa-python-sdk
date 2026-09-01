@@ -355,7 +355,12 @@ class Provider(_ProviderBase):
             async for response in self._stream:
                 await self._dispatch(response)
         except Exception as exc:  # noqa: BLE001
-            self._stream_error = exc
+            # Cancellation (e.g. close()) is expected and not an error.
+            if not (
+                isinstance(exc, grpc.RpcError)
+                and exc.code() == grpc.StatusCode.CANCELLED
+            ):
+                self._stream_error = exc
         finally:
             await self._actuation_queue.put(_STOP)
             for event in self._pending.values():
@@ -416,7 +421,14 @@ class Provider(_ProviderBase):
     async def provide_actuators(
         self, paths: Iterable[str], timeout: Optional[float] = None
     ) -> None:
+        # NOTE: does not verify that each path is an actuator (see the sync
+        # Provider.provide_actuators for details); callers should check
+        # Metadata.entry_type if they care.
         await self._open()
+        paths = list(paths)
+        # Resolve ids so incoming (id-keyed) actuation requests can be mapped
+        # back to their path, and so non-existent paths fail early.
+        await self._client._resolve_signal_ids(paths)
         request = self._build_provide_actuation_request(paths)
         self._register("provide_actuation_response")
         await self._send(request)
@@ -456,6 +468,8 @@ class Provider(_ProviderBase):
         if self._closed:
             return
         self._closed = True
+        if self._stream is not None:
+            self._stream.cancel()
         if self._reader_task is not None:
             self._reader_task.cancel()
             try:

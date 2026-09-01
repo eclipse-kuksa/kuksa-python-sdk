@@ -175,6 +175,7 @@ class Provider(_ProviderBase):
         self._send_queue: queue.Queue = queue.Queue()
         self._actuation_queue: queue.Queue = queue.Queue()
         self._reader_thread = None
+        self._stream = None
         self._pending: Dict[str, threading.Event] = {}
         self._stream_error = None
 
@@ -192,6 +193,10 @@ class Provider(_ProviderBase):
         self._check_not_closed()
         if self._reader_thread is not None:
             return
+        self._stream = self._client._stub.OpenProviderStream(
+            self._request_iterator(),
+            metadata=self._client._metadata_kwargs(),
+        )
         self._reader_thread = threading.Thread(
             target=self._run, name="kuksa-provider", daemon=True
         )
@@ -206,14 +211,15 @@ class Provider(_ProviderBase):
 
     def _run(self) -> None:
         try:
-            responses = self._client._stub.OpenProviderStream(
-                self._request_iterator(),
-                metadata=self._client._metadata_kwargs(),
-            )
-            for response in responses:
+            for response in self._stream:
                 self._dispatch(response)
         except Exception as exc:  # noqa: BLE001
-            self._stream_error = exc
+            # Cancellation (e.g. close()) is expected and not an error.
+            if not (
+                isinstance(exc, grpc.RpcError)
+                and exc.code() == grpc.StatusCode.CANCELLED
+            ):
+                self._stream_error = exc
         finally:
             self._actuation_queue.put(_STOP)
             for event in self._pending.values():
@@ -280,7 +286,15 @@ class Provider(_ProviderBase):
         self, paths: Iterable[str], timeout: Optional[float] = None
     ) -> None:
         """Claim ownership of the actuators identified by ``paths``."""
+        # NOTE: this does not verify that each path is an actuator. The
+        # databroker may accept (or ignore) non-actuator paths, so callers
+        # that care should check ``Metadata.entry_type == EntryType.ACTUATOR``
+        # first (the CLI does this for its mock-provider command).
         self._open()
+        paths = list(paths)
+        # Resolve ids so incoming (id-keyed) actuation requests can be mapped
+        # back to their path, and so non-existent paths fail early.
+        self._client._resolve_signal_ids(paths)
         request = self._build_provide_actuation_request(paths)
         self._register("provide_actuation_response")
         self._send(request)
@@ -324,6 +338,8 @@ class Provider(_ProviderBase):
             return
         self._closed = True
         self._send_queue.put(_STOP)
+        if self._stream is not None:
+            self._stream.cancel()
         if self._reader_thread is not None:
             self._reader_thread.join(timeout=5)
             self._reader_thread = None

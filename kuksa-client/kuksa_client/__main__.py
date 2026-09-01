@@ -45,6 +45,7 @@ from kuksa_client.v2 import EntryType
 from kuksa_client.v2 import KuksaClient
 from kuksa_client.v2 import KuksaError
 from kuksa_client.v2 import NotFound
+from kuksa_client.v2 import Provider
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 
@@ -143,6 +144,20 @@ def coerce_assignments(client, assignments):
     return updates
 
 
+def _check_actuator_paths(client, paths):
+    """
+    Return an error message if any of ``paths`` is not an actuator, else None.
+
+    The databroker does not reliably reject non-actuator paths on
+    ``ProvideActuationRequest``, so the CLI validates this client-side.
+    """
+    for path in paths:
+        metadata = client.get_metadata(path)
+        if metadata.entry_type != EntryType.ACTUATOR:
+            return f"{path} is not an actuator"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Path completion (interactive shell)
 # ---------------------------------------------------------------------------
@@ -192,6 +207,17 @@ def unsubscribe_completer(shell, text, line, begidx, endidx):
     return shell.basic_complete(text, line, begidx, endidx, items)
 
 
+def remove_mock_completer(shell, text, line, begidx, endidx):
+    """Complete active mock actuator provider ids."""
+    items = []
+    with shell._mock_lock:
+        for mock_id, info in shell._mocks.items():
+            items.append(
+                CompletionItem(str(mock_id), display=f"{mock_id}: {', '.join(info.paths)}")
+            )
+    return shell.basic_complete(text, line, begidx, endidx, items)
+
+
 # ---------------------------------------------------------------------------
 # Interactive shell
 # ---------------------------------------------------------------------------
@@ -200,6 +226,13 @@ def unsubscribe_completer(shell, text, line, begidx, endidx):
 class _BackgroundSubscription:
     paths: list
     stream: object = None
+    thread: threading.Thread = None
+
+
+@dataclasses.dataclass
+class _MockActuator:
+    paths: list
+    provider: object = None
     thread: threading.Thread = None
 
 
@@ -257,6 +290,22 @@ class KuksaShell(Cmd):
         completer=unsubscribe_completer,
     )
 
+    ap_mock_actuator = Cmd2ArgumentParser()
+    ap_mock_actuator.add_argument(
+        "Path",
+        help="Actuator path to provide",
+        nargs="+",
+        completer=path_completer,
+    )
+
+    ap_remove_mock = Cmd2ArgumentParser()
+    ap_remove_mock.add_argument(
+        "Id",
+        type=int,
+        help="Id of a mock actuator provider to remove",
+        completer=remove_mock_completer,
+    )
+
     ap_get_metadata = Cmd2ArgumentParser()
     ap_get_metadata.add_argument(
         "Path", help="Path whose metadata is to be read", completer=path_completer
@@ -299,6 +348,9 @@ class KuksaShell(Cmd):
         self._subscriptions = {}
         self._subscription_lock = threading.Lock()
         self._subscription_counter = 0
+        self._mocks = {}
+        self._mock_lock = threading.Lock()
+        self._mock_counter = 0
 
         with (pathlib.Path(scriptDir) / "logo").open("r", encoding="utf-8") as logo_file:
             print(logo_file.read().replace("%ver%", str(_metadata.__version__)))
@@ -378,6 +430,17 @@ class KuksaShell(Cmd):
             if info.thread is not None:
                 info.thread.join(timeout=1)
 
+    def _stop_mocks(self):
+        with self._mock_lock:
+            infos = list(self._mocks.values())
+            self._mocks.clear()
+        for info in infos:
+            if info.provider is not None:
+                info.provider.close()
+        for info in infos:
+            if info.thread is not None:
+                info.thread.join(timeout=1)
+
     @with_category(COMM_SETUP_COMMANDS)
     @with_argparser(ap_connect)
     def do_connect(self, args):
@@ -393,6 +456,7 @@ class KuksaShell(Cmd):
             self.client = None
         self._completion_paths = []
         self._stop_subscriptions()
+        self._stop_mocks()
 
     @with_category(COMM_SETUP_COMMANDS)
     @with_argparser(ap_authorize)
@@ -522,6 +586,89 @@ class KuksaShell(Cmd):
         return info
 
     @with_category(VSS_COMMANDS)
+    @with_argparser(ap_mock_actuator)
+    def do_mock_actuator(self, args):
+        """Register a mock provider that accepts and prints actuations"""
+        client = self._require_client()
+        try:
+            error = _check_actuator_paths(client, args.Path)
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+            return
+        if error is not None:
+            print(f"Error: {error}")
+            return
+
+        provider = Provider(client)
+        try:
+            provider.provide_actuators(args.Path)
+        except KuksaError as exc:
+            provider.close()
+            print(f"Error: {exc}")
+            return
+
+        with self._mock_lock:
+            self._mock_counter += 1
+            mock_id = self._mock_counter
+        thread = threading.Thread(
+            target=self._mock_actuator_loop,
+            args=(mock_id, provider),
+            daemon=True,
+        )
+        with self._mock_lock:
+            self._mocks[mock_id] = _MockActuator(
+                paths=list(args.Path), provider=provider, thread=thread
+            )
+        thread.start()
+        print(f"Registered mock actuator {mock_id} for {', '.join(args.Path)}")
+
+    def _mock_actuator_loop(self, mock_id, provider):
+        try:
+            for requests in provider.actuation_requests():
+                for request in requests:
+                    message = highlight(
+                        json.dumps(
+                            {"path": request.path, "value": request.value},
+                            indent=2,
+                            default=str,
+                        ),
+                        lexers.JsonLexer(),
+                        formatters.TerminalFormatter(),
+                    )
+                    self.add_alert(msg=message)
+                    try:
+                        provider.accept(request, ok=True)
+                    except Exception:
+                        pass
+        except Exception:
+            # The stream was terminated, e.g. by a disconnect or removal.
+            pass
+        finally:
+            with self._mock_lock:
+                self._mocks.pop(mock_id, None)
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_remove_mock)
+    def do_remove_mock(self, args):
+        """Remove a mock actuator provider"""
+        info = self._cancel_mock(args.Id)
+        if info is None:
+            print(f"No active mock actuator with id {args.Id}")
+            return
+        print(f"Removed mock actuator {args.Id} ({', '.join(info.paths)})")
+
+    def _cancel_mock(self, mock_id):
+        with self._mock_lock:
+            info = self._mocks.pop(mock_id, None)
+        if info is None:
+            return None
+        if info.provider is not None:
+            info.provider.close()
+        if info.thread is not None:
+            info.thread.join(timeout=1)
+        return info
+
+    @with_category(VSS_COMMANDS)
     @with_argparser(ap_get_metadata)
     def do_get_metadata(self, args):
         """Get the metadata of a path"""
@@ -583,6 +730,7 @@ class KuksaShell(Cmd):
             self.client.disconnect()
             self.client = None
         self._stop_subscriptions()
+        self._stop_mocks()
 
 
 def _metadata_to_dict(metadata):
@@ -632,6 +780,9 @@ def _build_one_shot_parser():
 
     p_sub = subparsers.add_parser("subscribe", help="Subscribe to one or more paths")
     p_sub.add_argument("paths", nargs="+")
+
+    p_mock = subparsers.add_parser("mock-actuator", help="Provide a mock actuator that prints received actuations")
+    p_mock.add_argument("paths", nargs="+", help="Actuator paths to provide")
 
     p_md = subparsers.add_parser("get-metadata", help="Get the metadata of a path")
     p_md.add_argument("path")
@@ -686,6 +837,23 @@ def _run_one_shot(args):
             elif command == "subscribe":
                 for updates in client.subscribe(args.paths):
                     print(json.dumps({p: dp.value for p, dp in updates.items()}, default=str))
+            elif command == "mock-actuator":
+                provider = Provider(client)
+                provider.provide_actuators(args.paths)
+                try:
+                    for requests in provider.actuation_requests():
+                        for request in requests:
+                            print(
+                                json.dumps(
+                                    {"path": request.path, "value": request.value},
+                                    default=str,
+                                )
+                            )
+                            provider.accept(request, ok=True)
+                except KeyboardInterrupt:
+                    pass
+                finally:
+                    provider.close()
             elif command == "get-metadata":
                 print(json.dumps(_metadata_to_dict(client.get_metadata(args.path)), indent=2))
             elif command == "list-metadata":
