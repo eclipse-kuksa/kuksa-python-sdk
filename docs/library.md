@@ -135,6 +135,31 @@ client.authorize(token)                 # attach token to subsequent requests
 info = client.get_server_info()         # -> ServerInfo(name, version, commit_hash)
 ```
 
+### Subscribing and unsubscribing
+
+`subscribe(paths)` returns an iterator (sync) / async iterator (async). The
+current value of every subscribed signal is yielded immediately, followed by
+batches of updates.
+
+To **unsubscribe**, break out of the loop (or drop the iterator); the underlying
+stream is cancelled automatically.
+
+```python
+# synchronous
+for updates in client.subscribe(["Vehicle.Speed"]):
+    print(updates)
+    if done:
+        break            # unsubscribe
+```
+
+```python
+# asynchronous
+async for updates in client.subscribe(["Vehicle.Speed"]):
+    print(updates)
+    if done:
+        break            # unsubscribe (or: await sub.aclose())
+```
+
 ## Providers
 
 A provider claims signals/actuators, publishes values at high frequency and

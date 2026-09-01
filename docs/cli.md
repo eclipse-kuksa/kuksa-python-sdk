@@ -58,6 +58,7 @@ Available one-shot commands:
 | `actuate <Path=Value...>` | Actuate actuators (target values) |
 | `subscribe <path...>` | Subscribe to updates |
 | `subscribe -b <path...>` | Subscribe in the background; updates print as alerts while the prompt stays usable |
+| `unsubscribe <id>` | Stop a background subscription |
 | `get_metadata <path>` | Get the metadata of a path |
 | `list_metadata <pattern>` | List metadata matching a pattern |
 | `expand <pattern>` | Expand a wildcard pattern into paths |

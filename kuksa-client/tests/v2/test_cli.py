@@ -5,14 +5,18 @@
 # ********************************************************************************/
 
 import io
+import threading
 
+import grpc
 import pytest
 from cmd2 import Cmd
 
+from kuksa_client.__main__ import _BackgroundSubscription
 from kuksa_client.__main__ import _matching_paths
 from kuksa_client.__main__ import coerce_assignments
 from kuksa_client.__main__ import path_completer
 from kuksa_client.__main__ import set_completer
+from kuksa_client.__main__ import unsubscribe_completer
 from kuksa_client.__main__ import KuksaShell
 from kuksa_client.v2 import Datapoint
 from kuksa_client.v2 import DataType
@@ -134,47 +138,119 @@ def test_coerce_assignments_unknown_path():
         coerce_assignments(client, ["Vehicle.NoSuch=1"])
 
 
-class _SubscribingClient:
-    def __init__(self, batches, connected=True):
-        self._batches = batches
-        self.connected = connected
-
-    def subscribe(self, paths):
-        yield from self._batches
-
-
-class _FailingClient:
+class _ParseClient:
     def __init__(self, connected=True):
         self.connected = connected
 
-    def subscribe(self, paths):
-        if False:  # pragma: no cover - make this a generator
-            yield
-        raise KuksaError("Path not found")
+    @staticmethod
+    def _parse_subscribe_response(response):
+        return {"Vehicle.Speed": Datapoint(42.0)}
+
+    @staticmethod
+    def _translate_rpc_error(exc):
+        return KuksaError(exc.details())
+
+
+class _FakeStream:
+    def __init__(self, n=1, error=None):
+        self._n = n
+        self._error = error
+        self.cancelled = False
+
+    def __iter__(self):
+        for _ in range(self._n):
+            yield object()
+        if self._error is not None:
+            raise self._error
+
+    def cancel(self):
+        self.cancelled = True
+
+
+class _FakeThread:
+    def __init__(self):
+        self.joined = False
+
+    def join(self, timeout=None):
+        self.joined = True
 
 
 def _alert_shell():
-    return Cmd(stdout=io.StringIO(), allow_cli_args=False)
+    shell = Cmd(stdout=io.StringIO(), allow_cli_args=False)
+    shell._subscriptions = {}
+    shell._subscription_lock = threading.Lock()
+    return shell
+
+
+def _grpc_error(code, details):
+    return grpc.aio.AioRpcError(
+        code=code,
+        initial_metadata=grpc.aio.Metadata(),
+        trailing_metadata=grpc.aio.Metadata(),
+        details=details,
+    )
 
 
 def test_subscribe_background_queues_alert():
     shell = _alert_shell()
-    client = _SubscribingClient([{"Vehicle.Speed": Datapoint(42.0)}])
-    KuksaShell._subscribe_background(shell, client, ["Vehicle.Speed"])
+    client = _ParseClient()
+    KuksaShell._subscribe_background(shell, 1, client, _FakeStream(n=1))
     assert len(shell._alert_queue) == 1
     assert "42.0" in shell._alert_queue[0].msg
 
 
+def test_subscribe_background_cancelled_silent():
+    shell = _alert_shell()
+    client = _ParseClient(connected=True)
+    error = _grpc_error(grpc.StatusCode.CANCELLED, "cancelled")
+    KuksaShell._subscribe_background(shell, 1, client, _FakeStream(n=0, error=error))
+    assert len(shell._alert_queue) == 0
+
+
 def test_subscribe_background_error_alerts_when_connected():
     shell = _alert_shell()
-    client = _FailingClient(connected=True)
-    KuksaShell._subscribe_background(shell, client, ["Vehicle.NoSuch"])
+    client = _ParseClient(connected=True)
+    error = _grpc_error(grpc.StatusCode.NOT_FOUND, "Path not found")
+    KuksaShell._subscribe_background(shell, 1, client, _FakeStream(n=0, error=error))
     assert len(shell._alert_queue) == 1
     assert "Subscription error" in shell._alert_queue[0].msg
 
 
 def test_subscribe_background_error_silent_when_disconnected():
     shell = _alert_shell()
-    client = _FailingClient(connected=False)
-    KuksaShell._subscribe_background(shell, client, ["Vehicle.NoSuch"])
+    client = _ParseClient(connected=False)
+    error = _grpc_error(grpc.StatusCode.NOT_FOUND, "Path not found")
+    KuksaShell._subscribe_background(shell, 1, client, _FakeStream(n=0, error=error))
     assert len(shell._alert_queue) == 0
+
+
+def test_unsubscribe_completer():
+    shell = _alert_shell()
+    shell._subscriptions = {
+        1: _BackgroundSubscription(paths=["Vehicle.Speed"]),
+        2: _BackgroundSubscription(paths=["Vehicle.Speed", "Vehicle.ADAS.ABS.IsActive"]),
+    }
+    completions = unsubscribe_completer(shell, "", "", 0, 0)
+    by_text = {item.text: item.display for item in completions.items}
+    assert set(by_text) == {"1", "2"}
+    assert by_text["1"] == "1: Vehicle.Speed"
+    assert by_text["2"] == "2: Vehicle.Speed, Vehicle.ADAS.ABS.IsActive"
+
+
+def test_cancel_subscription():
+    shell = _alert_shell()
+    stream = _FakeStream()
+    thread = _FakeThread()
+    shell._subscriptions[3] = _BackgroundSubscription(
+        paths=["Vehicle.Speed"], stream=stream, thread=thread
+    )
+    info = KuksaShell._cancel_subscription(shell, 3)
+    assert info.paths == ["Vehicle.Speed"]
+    assert stream.cancelled is True
+    assert thread.joined is True
+    assert 3 not in shell._subscriptions
+
+
+def test_cancel_subscription_missing():
+    shell = _alert_shell()
+    assert KuksaShell._cancel_subscription(shell, 99) is None

@@ -310,6 +310,11 @@ class KuksaClient(_KuksaCore):
         except grpc.RpcError as exc:
             raise from_grpc_error(exc) from exc
 
+    def _subscribe_stream(self, paths: Iterable[str], buffer_size: Optional[int] = None):
+        """Return the raw, cancellable ``Subscribe`` stream for ``paths``."""
+        request = self._build_subscribe_request(paths, buffer_size)
+        return self._stream("Subscribe", request)
+
     def subscribe(
         self,
         paths: Iterable[str],
@@ -320,15 +325,20 @@ class KuksaClient(_KuksaCore):
 
         Yields ``Dict[str, Datapoint]`` for each batch of updates. The current
         value of every subscribed signal is yielded immediately.
+
+        To unsubscribe, ``break`` out of the loop (or drop the generator); the
+        underlying stream is cancelled automatically.
         """
         self._check_connected()
-        request = self._build_subscribe_request(paths, buffer_size)
+        stream = self._subscribe_stream(paths, buffer_size)
         try:
-            stream = self._stream("Subscribe", request)
             for response in stream:
                 yield self._parse_subscribe_response(response)
         except grpc.RpcError as exc:
             raise from_grpc_error(exc) from exc
+        finally:
+            if hasattr(stream, "cancel"):
+                stream.cancel()
 
     def get_metadata(self, path: str) -> Metadata:
         """Return the metadata of a single signal."""

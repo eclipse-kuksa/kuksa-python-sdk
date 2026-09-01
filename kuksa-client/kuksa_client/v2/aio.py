@@ -255,12 +255,15 @@ class KuksaClient(_KuksaCore):
     ) -> AsyncIterator[Dict[str, Datapoint]]:
         self._check_connected()
         request = self._build_subscribe_request(paths, buffer_size)
+        stream = self._stream("Subscribe", request)
         try:
-            stream = self._stream("Subscribe", request)
             async for response in stream:
                 yield self._parse_subscribe_response(response)
         except grpc.RpcError as exc:
             raise from_grpc_error(exc) from exc
+        finally:
+            if hasattr(stream, "cancel"):
+                stream.cancel()
 
     async def get_metadata(self, path: str) -> Metadata:
         self._check_connected()
