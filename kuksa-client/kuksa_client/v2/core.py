@@ -16,9 +16,9 @@ Transport-agnostic protocol logic shared by the synchronous and asynchronous
 clients.
 
 This module contains no I/O of its own. Concrete clients supply the low level
-``_call``, ``_stream`` and ``_open_provider_stream`` primitives; everything else
-(request building, response parsing, type/id resolution, error mapping, path
-expansion) lives here so it is written exactly once.
+``_call`` and ``_stream`` primitives (plus ``connect``/``disconnect``);
+everything else (request building, response parsing, type/id resolution, error
+mapping, path expansion) lives here so it is written exactly once.
 """
 
 from __future__ import annotations

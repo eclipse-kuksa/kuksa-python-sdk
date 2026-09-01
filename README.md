@@ -80,3 +80,6 @@ See the KUKSA Python SDK [Contribition document](https://github.com/eclipse-kuks
 
 For information on tools useful for KUKSA Python SDK development environment and help on troubleshooting frequent problems please visit
 the KUKSA Python SDK [development and troubleshooting documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/development_troubleshoot.md).
+
+For an overview of the `kuksa_client.v2` library internals and its design
+patterns, see the [architecture documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/architecture.md).

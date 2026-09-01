@@ -207,3 +207,9 @@ codec.from_proto_value(...)                # proto -> native
 
 The legacy APIs remain available but emit a `DeprecationWarning`. Their
 examples are kept under [`examples/legacy/`](examples/legacy/).
+
+## Further reading
+
+- [`architecture.md`](architecture.md) — how the `kuksa_client.v2` library is
+  structured and its design patterns.
+- [`Redesign.md`](../Redesign.md) — the design decisions behind the redesign.
