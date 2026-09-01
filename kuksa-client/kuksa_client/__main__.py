@@ -18,6 +18,7 @@
 ########################################################################
 
 import argparse
+import dataclasses
 import json
 import logging
 import os
@@ -26,8 +27,10 @@ import sys
 import threading
 from urllib.parse import urlparse
 
+import grpc
 from cmd2 import Cmd
 from cmd2 import Cmd2ArgumentParser
+from cmd2 import CompletionItem
 from cmd2 import with_argparser
 from cmd2 import with_category
 from cmd2 import constants
@@ -178,9 +181,27 @@ def set_completer(shell, text, line, begidx, endidx):
     )
 
 
+def unsubscribe_completer(shell, text, line, begidx, endidx):
+    """Complete active background subscription ids."""
+    items = []
+    with shell._subscription_lock:
+        for sub_id, info in shell._subscriptions.items():
+            items.append(
+                CompletionItem(str(sub_id), display=f"{sub_id}: {', '.join(info.paths)}")
+            )
+    return shell.basic_complete(text, line, begidx, endidx, items)
+
+
 # ---------------------------------------------------------------------------
 # Interactive shell
 # ---------------------------------------------------------------------------
+
+@dataclasses.dataclass
+class _BackgroundSubscription:
+    paths: list
+    stream: object = None
+    thread: threading.Thread = None
+
 
 class KuksaShell(Cmd):
     COMM_SETUP_COMMANDS = "Communication Set-up Commands"
@@ -228,6 +249,14 @@ class KuksaShell(Cmd):
         help="Subscribe in the background and print updates as alerts",
     )
 
+    ap_unsubscribe = Cmd2ArgumentParser()
+    ap_unsubscribe.add_argument(
+        "SubscribeId",
+        type=int,
+        help="Id of a background subscription to stop",
+        completer=unsubscribe_completer,
+    )
+
     ap_get_metadata = Cmd2ArgumentParser()
     ap_get_metadata.add_argument(
         "Path", help="Path whose metadata is to be read", completer=path_completer
@@ -267,7 +296,9 @@ class KuksaShell(Cmd):
         self.tls_server_name = tls_server_name
         self.client = None
         self._completion_paths = []
-        self._subscribe_threads = []
+        self._subscriptions = {}
+        self._subscription_lock = threading.Lock()
+        self._subscription_counter = 0
 
         with (pathlib.Path(scriptDir) / "logo").open("r", encoding="utf-8") as logo_file:
             print(logo_file.read().replace("%ver%", str(_metadata.__version__)))
@@ -337,9 +368,15 @@ class KuksaShell(Cmd):
         )
 
     def _stop_subscriptions(self):
-        for thread in self._subscribe_threads:
-            thread.join(timeout=1)
-        self._subscribe_threads = []
+        with self._subscription_lock:
+            infos = list(self._subscriptions.values())
+            self._subscriptions.clear()
+        for info in infos:
+            if info.stream is not None:
+                info.stream.cancel()
+        for info in infos:
+            if info.thread is not None:
+                info.thread.join(timeout=1)
 
     @with_category(COMM_SETUP_COMMANDS)
     @with_argparser(ap_connect)
@@ -417,14 +454,21 @@ class KuksaShell(Cmd):
         """Subscribe to updates of one or more paths"""
         client = self._require_client()
         if args.background:
+            stream = client._subscribe_stream(args.Path)
+            with self._subscription_lock:
+                self._subscription_counter += 1
+                sub_id = self._subscription_counter
             thread = threading.Thread(
                 target=self._subscribe_background,
-                args=(client, args.Path),
+                args=(sub_id, client, stream),
                 daemon=True,
             )
-            self._subscribe_threads.append(thread)
+            with self._subscription_lock:
+                self._subscriptions[sub_id] = _BackgroundSubscription(
+                    paths=list(args.Path), stream=stream, thread=thread
+                )
             thread.start()
-            print(f"Subscribed to {', '.join(args.Path)} (background)")
+            print(f"Subscribed to {', '.join(args.Path)} (subscription {sub_id})")
             return
         try:
             for updates in client.subscribe(args.Path):
@@ -432,9 +476,10 @@ class KuksaShell(Cmd):
         except KuksaError as exc:
             print(f"Error: {exc}")
 
-    def _subscribe_background(self, client, paths):
+    def _subscribe_background(self, sub_id, client, stream):
         try:
-            for updates in client.subscribe(paths):
+            for response in stream:
+                updates = client._parse_subscribe_response(response)
                 message = highlight(
                     json.dumps(
                         {path: dp.value for path, dp in updates.items()},
@@ -445,12 +490,36 @@ class KuksaShell(Cmd):
                     formatters.TerminalFormatter(),
                 )
                 self.add_alert(msg=message)
-        except KuksaError as exc:
-            if client.connected:
-                self.add_alert(msg=f"Subscription error: {exc}")
+        except grpc.RpcError as exc:
+            if exc.code() != grpc.StatusCode.CANCELLED and client.connected:
+                self.add_alert(msg=f"Subscription error: {client._translate_rpc_error(exc)}")
         except Exception:
             # The stream was terminated, e.g. by a disconnect.
             pass
+        finally:
+            with self._subscription_lock:
+                self._subscriptions.pop(sub_id, None)
+
+    @with_category(VSS_COMMANDS)
+    @with_argparser(ap_unsubscribe)
+    def do_unsubscribe(self, args):
+        """Stop a background subscription"""
+        info = self._cancel_subscription(args.SubscribeId)
+        if info is None:
+            print(f"No active subscription with id {args.SubscribeId}")
+            return
+        print(f"Unsubscribed {args.SubscribeId} ({', '.join(info.paths)})")
+
+    def _cancel_subscription(self, sub_id):
+        with self._subscription_lock:
+            info = self._subscriptions.pop(sub_id, None)
+        if info is None:
+            return None
+        if info.stream is not None:
+            info.stream.cancel()
+        if info.thread is not None:
+            info.thread.join(timeout=1)
+        return info
 
     @with_category(VSS_COMMANDS)
     @with_argparser(ap_get_metadata)

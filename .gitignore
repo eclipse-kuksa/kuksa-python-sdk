@@ -7,3 +7,4 @@ venv
 **/*.egg-info
 kuksa-client/dist
 kuksa-client/kuksa/
+kuksa-client/build/
