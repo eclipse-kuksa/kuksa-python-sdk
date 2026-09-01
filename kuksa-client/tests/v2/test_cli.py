@@ -13,6 +13,7 @@ from cmd2 import Cmd
 
 from kuksa_client.__main__ import _BackgroundSubscription
 from kuksa_client.__main__ import _check_actuator_paths
+from kuksa_client.__main__ import _expand_wildcard_paths
 from kuksa_client.__main__ import _MockActuator
 from kuksa_client.__main__ import _matching_paths
 from kuksa_client.__main__ import coerce_assignments
@@ -160,6 +161,41 @@ def test_check_actuator_paths_rejects_non_actuator():
 def test_check_actuator_paths_accepts_actuator():
     client = _EntryTypeClient({"Vehicle.Body.Wiper.Pos": EntryType.ACTUATOR})
     assert _check_actuator_paths(client, ["Vehicle.Body.Wiper.Pos"]) is None
+
+
+class _ExpandClient:
+    def __init__(self, expansions):
+        self._expansions = expansions
+
+    def expand(self, pattern):
+        return self._expansions.get(pattern, [])
+
+
+def test_expand_wildcard_paths_exact_passthrough():
+    client = _ExpandClient({})
+    assert _expand_wildcard_paths(client, ["Vehicle.Speed"]) == ["Vehicle.Speed"]
+
+
+def test_expand_wildcard_paths_expands_and_dedupes():
+    client = _ExpandClient({
+        "Vehicle.Cabin.**": [
+            "Vehicle.Cabin.Sunroof.Position",
+            "Vehicle.Cabin.Sunroof.Switch",
+        ],
+        "Vehicle.*": ["Vehicle.Speed", "Vehicle.SomeString"],
+    })
+    assert _expand_wildcard_paths(
+        client, ["Vehicle.Cabin.**", "Vehicle.Speed", "Vehicle.Cabin.**"]
+    ) == [
+        "Vehicle.Cabin.Sunroof.Position",
+        "Vehicle.Cabin.Sunroof.Switch",
+        "Vehicle.Speed",
+    ]
+
+
+def test_expand_wildcard_paths_empty():
+    client = _ExpandClient({"Vehicle.NoSuch.**": []})
+    assert _expand_wildcard_paths(client, ["Vehicle.NoSuch.**"]) == []
 
 
 class _ParseClient:
