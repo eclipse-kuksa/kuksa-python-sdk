@@ -36,14 +36,13 @@ Available one-shot commands:
 
 | Command | Description |
 |---------|-------------|
-| `get <path...>` | Get the value of one or more paths |
+| `get <path...>` | Get the value of one or more paths (wildcards are expanded) |
 | `set <Path=Value...>` | Set values (e.g. `Vehicle.Speed=42`) |
 | `actuate <Path=Value...>` | Actuate actuators (e.g. `Vehicle.Body.Wiper.Pos=45`) |
-| `subscribe <path...>` | Subscribe to one or more paths |
+| `subscribe <path...>` | Subscribe to one or more paths (wildcards are expanded) |
 | `mock-actuator <path...>` | Provide a mock actuator that accepts and prints received actuations (until terminated) |
 | `get-metadata <path>` | Get the metadata of a path |
 | `list-metadata <pattern>` | List metadata matching a pattern |
-| `expand <pattern>` | Expand a wildcard pattern into paths |
 | `has-signal <path>` | Check whether a signal exists |
 | `server-info` | Show databroker info |
 
@@ -54,17 +53,16 @@ Available one-shot commands:
 | `connect <grpc://host:port>` | Connect to a databroker |
 | `disconnect` | Disconnect from the databroker |
 | `authorize <token>` | Authorize with a JWT token or token file |
-| `get <path...>` | Get the value of one or more paths |
+| `get <path...>` | Get the value of one or more paths (wildcards are expanded) |
 | `set <Path=Value...>` | Set values |
 | `actuate <Path=Value...>` | Actuate actuators (target values) |
-| `subscribe <path...>` | Subscribe to updates |
+| `subscribe <path...>` | Subscribe to updates (wildcards are expanded) |
 | `subscribe -b <path...>` | Subscribe in the background; updates print as alerts while the prompt stays usable |
 | `unsubscribe <id>` | Stop a background subscription |
 | `mock_actuator <path...>` | Register a mock provider that accepts and prints actuations |
 | `remove_mock <id>` | Remove a mock actuator provider |
 | `get_metadata <path>` | Get the metadata of a path |
 | `list_metadata <pattern>` | List metadata matching a pattern |
-| `expand <pattern>` | Expand a wildcard pattern into paths |
 | `has_signal <path>` | Check whether a signal exists |
 | `info` / `version` | Show client info / version |
 

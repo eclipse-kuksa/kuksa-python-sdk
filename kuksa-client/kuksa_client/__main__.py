@@ -158,6 +158,28 @@ def _check_actuator_paths(client, paths):
     return None
 
 
+def _expand_wildcard_paths(client, paths):
+    """
+    Resolve ``paths`` into concrete signal paths.
+
+    Paths containing ``*`` are expanded via ``client.expand``; exact paths are
+    passed through unchanged. Duplicates are removed, order is preserved.
+    """
+    resolved = []
+    for path in paths:
+        if "*" in path:
+            resolved.extend(client.expand(path))
+        else:
+            resolved.append(path)
+    seen = set()
+    result = []
+    for path in resolved:
+        if path not in seen:
+            seen.add(path)
+            result.append(path)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Path completion (interactive shell)
 # ---------------------------------------------------------------------------
@@ -316,16 +338,6 @@ class KuksaShell(Cmd):
         "Pattern", help="Exact path or wildcard pattern", completer=path_completer
     )
 
-    ap_expand = Cmd2ArgumentParser()
-    ap_expand.add_argument("Pattern", help="Wildcard pattern", completer=path_completer)
-    ap_expand.add_argument(
-        "-t",
-        "--entry-type",
-        choices=[e.name for e in EntryType],
-        default=None,
-        help="Only list signals of this entry type",
-    )
-
     ap_has_signal = Cmd2ArgumentParser()
     ap_has_signal.add_argument("Path", help="Path to check", completer=path_completer)
 
@@ -470,17 +482,29 @@ class KuksaShell(Cmd):
     @with_category(VSS_COMMANDS)
     @with_argparser(ap_get)
     def do_get(self, args):
-        """Get the value of one or more paths"""
+        """Get the value of one or more paths (wildcards are expanded)"""
         client = self._require_client()
+        single = len(args.Path) == 1 and not any("*" in path for path in args.Path)
         try:
-            result = client.get(args.Path if len(args.Path) > 1 else args.Path[0])
+            resolved = _expand_wildcard_paths(client, args.Path)
         except KuksaError as exc:
             print(f"Error: {exc}")
             return
-        if isinstance(result, dict):
-            self._print_json({path: dp.value for path, dp in result.items()})
-        else:
+        if not resolved:
+            print("No signals match the given path(s)")
+            return
+        try:
+            if single:
+                result = client.get(resolved[0])
+            else:
+                result = client.get(resolved)
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+            return
+        if single:
             self._print_json({"value": result.value, "timestamp": result.timestamp})
+        else:
+            self._print_json({path: dp.value for path, dp in result.items()})
 
     @with_category(VSS_COMMANDS)
     @with_argparser(ap_set)
@@ -515,10 +539,18 @@ class KuksaShell(Cmd):
     @with_category(VSS_COMMANDS)
     @with_argparser(ap_subscribe)
     def do_subscribe(self, args):
-        """Subscribe to updates of one or more paths"""
+        """Subscribe to updates of one or more paths (wildcards are expanded)"""
         client = self._require_client()
+        try:
+            resolved = _expand_wildcard_paths(client, args.Path)
+        except KuksaError as exc:
+            print(f"Error: {exc}")
+            return
+        if not resolved:
+            print("No signals match the given path(s)")
+            return
         if args.background:
-            stream = client._subscribe_stream(args.Path)
+            stream = client._subscribe_stream(resolved)
             with self._subscription_lock:
                 self._subscription_counter += 1
                 sub_id = self._subscription_counter
@@ -535,7 +567,7 @@ class KuksaShell(Cmd):
             print(f"Subscribed to {', '.join(args.Path)} (subscription {sub_id})")
             return
         try:
-            for updates in client.subscribe(args.Path):
+            for updates in client.subscribe(resolved):
                 self._print_json({path: dp.value for path, dp in updates.items()})
         except KuksaError as exc:
             print(f"Error: {exc}")
@@ -691,18 +723,6 @@ class KuksaShell(Cmd):
             print(f"Error: {exc}")
 
     @with_category(VSS_COMMANDS)
-    @with_argparser(ap_expand)
-    def do_expand(self, args):
-        """Expand a wildcard pattern into concrete signal paths"""
-        client = self._require_client()
-        try:
-            entry_type = EntryType[args.entry_type] if args.entry_type else None
-            paths = client.expand(args.Pattern, entry_type=entry_type)
-            self._print_json(paths)
-        except KuksaError as exc:
-            print(f"Error: {exc}")
-
-    @with_category(VSS_COMMANDS)
     @with_argparser(ap_has_signal)
     def do_has_signal(self, args):
         """Check whether a signal exists"""
@@ -790,9 +810,6 @@ def _build_one_shot_parser():
     p_lmd = subparsers.add_parser("list-metadata", help="List metadata matching a pattern")
     p_lmd.add_argument("pattern")
 
-    p_exp = subparsers.add_parser("expand", help="Expand a wildcard pattern into paths")
-    p_exp.add_argument("pattern")
-
     p_has = subparsers.add_parser("has-signal", help="Check whether a signal exists")
     p_has.add_argument("path")
 
@@ -825,17 +842,27 @@ def _run_one_shot(args):
             command = args.command
             if command == "get":
                 paths = args.paths
-                result = client.get(paths if len(paths) > 1 else paths[0])
-                if isinstance(result, dict):
-                    print(json.dumps({p: dp.value for p, dp in result.items()}, indent=2, default=str))
-                else:
+                single = len(paths) == 1 and not any("*" in p for p in paths)
+                resolved = _expand_wildcard_paths(client, paths)
+                if not resolved:
+                    print("No signals match the given path(s)", file=sys.stderr)
+                    return 1
+                if single:
+                    result = client.get(resolved[0])
                     print(json.dumps({"value": result.value, "timestamp": result.timestamp}, indent=2, default=str))
+                else:
+                    result = client.get(resolved)
+                    print(json.dumps({p: dp.value for p, dp in result.items()}, indent=2, default=str))
             elif command == "set":
                 client.set(coerce_assignments(client, args.assignments))
             elif command == "actuate":
                 client.actuate(coerce_assignments(client, args.assignments))
             elif command == "subscribe":
-                for updates in client.subscribe(args.paths):
+                resolved = _expand_wildcard_paths(client, args.paths)
+                if not resolved:
+                    print("No signals match the given path(s)", file=sys.stderr)
+                    return 1
+                for updates in client.subscribe(resolved):
                     print(json.dumps({p: dp.value for p, dp in updates.items()}, default=str))
             elif command == "mock-actuator":
                 provider = Provider(client)
@@ -858,8 +885,6 @@ def _run_one_shot(args):
                 print(json.dumps(_metadata_to_dict(client.get_metadata(args.path)), indent=2))
             elif command == "list-metadata":
                 print(json.dumps([_metadata_to_dict(m) for m in client.list_metadata(args.pattern)], indent=2))
-            elif command == "expand":
-                print("\n".join(client.expand(args.pattern)))
             elif command == "has-signal":
                 print(client.has_signal(args.path))
             elif command == "server-info":
