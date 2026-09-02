@@ -101,3 +101,12 @@ async def test_subscribe(client):
     await client.set({"Vehicle.Speed": 20.0})
     second = await iterator.__anext__()
     assert second["Vehicle.Speed"].value == 20.0
+
+
+@pytest.mark.asyncio
+async def test_connect_via_unix_socket(unix_server):
+    async with KuksaClient(unix_socket=unix_server) as client:
+        info = await client.get_server_info()
+        assert info.name == "mock-databroker"
+        await client.set({"Vehicle.Speed": 42.0})
+        assert (await client.get("Vehicle.Speed")).value == 42.0

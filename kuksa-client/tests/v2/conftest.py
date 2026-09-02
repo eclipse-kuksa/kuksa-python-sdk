@@ -12,6 +12,8 @@
 # ********************************************************************************/
 
 import asyncio
+import os
+import shutil
 import threading
 
 import grpc
@@ -109,3 +111,35 @@ def server(broker, unused_tcp_port):
         asyncio.run_coroutine_threadsafe(_teardown(), loop).result()
         loop.call_soon_threadsafe(loop.stop)
         thread.join(timeout=5)
+
+
+@pytest.fixture
+def unix_server(broker):
+    import tempfile
+
+    tmp_dir = tempfile.mkdtemp(prefix="kuksa", dir="/tmp")
+    socket_path = os.path.join(tmp_dir, "k.sock")
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+
+    holder = {}
+
+    async def _setup():
+        grpc_server = grpc.aio.server()
+        val_pb2_grpc.add_VALServicer_to_server(broker, grpc_server)
+        grpc_server.add_insecure_port(f"unix:{socket_path}")
+        await grpc_server.start()
+        holder["server"] = grpc_server
+
+    asyncio.run_coroutine_threadsafe(_setup(), loop).result()
+    try:
+        yield socket_path
+    finally:
+        async def _teardown():
+            await holder["server"].stop(grace=0.5)
+
+        asyncio.run_coroutine_threadsafe(_teardown(), loop).result()
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=5)
+        shutil.rmtree(tmp_dir, ignore_errors=True)

@@ -73,11 +73,19 @@ KuksaClient(
     token=None,               # optional JWT token
     root_certificates=None,   # optional pathlib.Path to a CA for TLS
     tls_server_name=None,     # optional TLS server name override
+    unix_socket=None,         # optional path to a unix domain socket (ignores host/port)
 )
 ```
 
 Both clients are context managers; entering them connects, exiting disconnects.
 You may also call `connect()` / `disconnect()` explicitly.
+
+To connect over a unix domain socket, pass `unix_socket`:
+
+```python
+with KuksaClient(unix_socket="/tmp/kuksa.sock") as client:
+    ...
+```
 
 ### Values (`get` / `set`)
 

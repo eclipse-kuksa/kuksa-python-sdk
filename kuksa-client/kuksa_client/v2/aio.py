@@ -57,6 +57,7 @@ class KuksaClient(_KuksaCore):
         token: Optional[str] = None,
         root_certificates: Optional[Path] = None,
         tls_server_name: Optional[str] = None,
+        unix_socket: Optional[Path] = None,
         ensure_startup_connection: bool = True,
     ):
         super().__init__(
@@ -65,6 +66,7 @@ class KuksaClient(_KuksaCore):
             token=token,
             root_certificates=root_certificates,
             tls_server_name=tls_server_name,
+            unix_socket=unix_socket,
             ensure_startup_connection=ensure_startup_connection,
         )
         self._channel = None
@@ -82,7 +84,11 @@ class KuksaClient(_KuksaCore):
         await self.disconnect()
         self._channel = await self._exit_stack.enter_async_context(
             transport.create_aio_channel(
-                self.host, self.port, self.root_certificates, self.tls_server_name
+                self.host,
+                self.port,
+                self.root_certificates,
+                self.tls_server_name,
+                self.unix_socket,
             )
         )
         self._stub = val_pb2_grpc.VALStub(self._channel)

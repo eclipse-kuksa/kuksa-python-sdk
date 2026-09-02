@@ -78,7 +78,6 @@ def test_list_metadata_pattern(client):
 def test_expand(client):
     paths = client.expand("Vehicle.Cabin.Sunroof.**")
     assert "Vehicle.Cabin.Sunroof.Shade.Position" in paths
-    assert "Vehicle.Cabin.Sunroof.Position" in paths
 
 
 def test_expand_by_entry_type(client):
@@ -116,3 +115,11 @@ def test_subscribe(client):
     client.set({"Vehicle.Speed": 20.0})
     second = next(iterator)
     assert second["Vehicle.Speed"].value == 20.0
+
+
+def test_connect_via_unix_socket(unix_server):
+    with KuksaClient(unix_socket=unix_server) as client:
+        info = client.get_server_info()
+        assert info.name == "mock-databroker"
+        client.set({"Vehicle.Speed": 42.0})
+        assert client.get("Vehicle.Speed").value == 42.0

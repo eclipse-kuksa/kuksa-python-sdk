@@ -50,7 +50,8 @@ Available one-shot commands:
 
 | Command | Description |
 |---------|-------------|
-| `connect <grpc://host:port>` | Connect to a databroker |
+| `connect <grpc://host:port>` | Connect to a databroker over TCP |
+| `connect <unix:///path/to/socket>` | Connect to a databroker over a unix domain socket |
 | `disconnect` | Disconnect from the databroker |
 | `authorize <token>` | Authorize with a JWT token or token file |
 | `get <path...>` | Get the value of one or more paths (wildcards are expanded) |
@@ -91,6 +92,17 @@ If connecting by IP address, `--tls-server-name` may also be required:
 ```console
 kuksa-client --server grpcs://127.0.0.1:55555 --cacertificate ~/kuksa-common/tls/CA.pem --tls-server-name Server
 ```
+
+## Unix domain sockets
+
+KUKSA Client can connect to a databroker listening on a unix domain socket
+using the `unix://` scheme (note the triple slash for an absolute path):
+
+```console
+kuksa-client --server unix:///tmp/kuksa.sock get Vehicle.Speed
+```
+
+The databroker is started with e.g. `--enable-unix-socket --unix-socket /tmp/kuksa.sock`.
 
 ## Authorization
 

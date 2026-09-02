@@ -26,7 +26,7 @@ is reachable through a raw-proto "escape hatch".
 | `patterns.py` | Client-side wildcard matching (databroker semantics pinned locally). |
 | `metadata.py` | `MetadataStore`: an in-memory, per-connection metadata/id cache. |
 | `errors.py` | `KuksaError` hierarchy + mappers from gRPC status codes and v2 `ErrorCode`s. |
-| `transport.py` | Channel + TLS construction helpers for sync and aio. |
+| `transport.py` | Channel + TLS construction helpers for sync and aio (TCP or unix socket). |
 | `core.py` | `_KuksaCore`: transport-agnostic shared state and protocol logic. |
 | `__init__.py` | The synchronous `KuksaClient`. |
 | `aio.py` | The asynchronous `KuksaClient` and asynchronous `Provider`. |

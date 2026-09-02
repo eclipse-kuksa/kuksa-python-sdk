@@ -266,7 +266,7 @@ class KuksaShell(Cmd):
     ap_connect = Cmd2ArgumentParser()
     ap_connect.add_argument(
         "server",
-        help="Databroker to connect to. Format: grpc://host[:port] or grpcs://host[:port].",
+        help="Databroker to connect to. Format: grpc://host[:port], grpcs://host[:port] or unix:///path/to/socket.",
     )
 
     ap_authorize = Cmd2ArgumentParser()
@@ -380,6 +380,15 @@ class KuksaShell(Cmd):
 
     def _connect_kwargs(self):
         srv = urlparse(self.server)
+        if srv.scheme == "unix":
+            kwargs = {
+                "unix_socket": srv.path,
+                "tls_server_name": self.tls_server_name,
+            }
+            token = self._load_token(self.token_or_tokenfile)
+            if token:
+                kwargs["token"] = token
+            return kwargs
         host = srv.hostname or "127.0.0.1"
         port = srv.port or 55555
         kwargs = {
@@ -413,7 +422,10 @@ class KuksaShell(Cmd):
         kwargs = self._connect_kwargs()
         if kwargs is None:
             return
-        print(f"Connecting to databroker at {kwargs['host']} port {kwargs['port']}...")
+        if "unix_socket" in kwargs:
+            print(f"Connecting to databroker at unix://{kwargs['unix_socket']}...")
+        else:
+            print(f"Connecting to databroker at {kwargs['host']} port {kwargs['port']}...")
         self.client = KuksaClient(**kwargs)
         self.client.connect()
         try:
@@ -781,7 +793,7 @@ def _build_one_shot_parser():
     parser.add_argument(
         "--server",
         default=DEFAULT_KUKSA_ADDRESS,
-        help="Databroker to connect to. Format: grpc://host[:port] or grpcs://host[:port].",
+        help="Databroker to connect to. Format: grpc://host[:port], grpcs://host[:port] or unix:///path/to/socket.",
     )
     parser.add_argument("--token", default=DEFAULT_TOKEN_OR_TOKENFILE, help="JWT token or path to a .token file")
     parser.add_argument("--cacertificate", default=DEFAULT_CACERTIFICATE, help="Client root cert file (.pem)")
@@ -820,6 +832,14 @@ def _build_one_shot_parser():
 
 def _open_client(args):
     srv = urlparse(args.server)
+    if srv.scheme == "unix":
+        kwargs = {"unix_socket": srv.path, "tls_server_name": args.tls_server_name}
+        token = args.token
+        if token and pathlib.Path(token).is_file():
+            token = pathlib.Path(token).read_text(encoding="utf-8").rstrip("\n")
+        if token:
+            kwargs["token"] = token
+        return KuksaClient(**kwargs)
     host = srv.hostname or "127.0.0.1"
     port = srv.port or 55555
     kwargs = {"host": host, "port": port, "tls_server_name": args.tls_server_name}
