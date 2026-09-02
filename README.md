@@ -81,5 +81,8 @@ See the KUKSA Python SDK [Contribition document](https://github.com/eclipse-kuks
 For information on tools useful for KUKSA Python SDK development environment and help on troubleshooting frequent problems please visit
 the KUKSA Python SDK [development and troubleshooting documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/development_troubleshoot.md).
 
+<!--
+This page is also Pypi front page so can only use absolute links, however, as this is not in main, it does not work yet
 For an overview of the `kuksa_client.v2` library internals and its design
-patterns, see the [architecture documentation](https://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/architecture.md).
+patterns, see the [architecture documentation](hxxs://github.com/eclipse-kuksa/kuksa-python-sdk/blob/main/docs/architecture.md).
+-->
