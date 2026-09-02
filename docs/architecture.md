@@ -23,6 +23,7 @@ is reachable through a raw-proto "escape hatch".
 |--------|----------------|
 | `types.py` | Pure dataclasses/enums (`Datapoint`, `Metadata`, `DataType`, `EntryType`, `ServerInfo`, …). No proto imports. |
 | `codec.py` | The single source of truth for `native value ↔ kuksa.val.v2 Value/Datapoint` encoding. |
+| `coercion.py` | String → native value coercion (`coerce_value`, `coerce_values`); the boundary for CSV/CLI/config input. |
 | `patterns.py` | Client-side wildcard matching (databroker semantics pinned locally). |
 | `metadata.py` | `MetadataStore`: an in-memory, per-connection metadata/id cache. |
 | `errors.py` | `KuksaError` hierarchy + mappers from gRPC status codes and v2 `ErrorCode`s. |
@@ -33,8 +34,8 @@ is reachable through a raw-proto "escape hatch".
 | `provider.py` | `Provider` (shared base + sync implementation) and `ActuationRequest`. |
 
 Dependency direction is one-way: `types`/`errors` are leaf modules; `codec`,
-`patterns`, `metadata`, `transport` depend only on them; `core` composes those;
-`__init__`/`aio`/`provider` sit on top.
+`coercion`, `patterns`, `metadata`, `transport` depend only on them; `core`
+composes those; `__init__`/`aio`/`provider` sit on top.
 
 ## Core design: shared core + thin I/O
 
@@ -117,11 +118,25 @@ Notable points:
 - `TIMESTAMP`/`TIMESTAMP_ARRAY` are intentionally absent (the v2 `Value` oneof
   has no timestamp field).
 - No string casting happens here — values are expected to be native Python values
-  of the right type. (The CLI does its own coercion.)
+  of the right type. String input (CSV, CLI, config files, ...) is handled by
+  `coercion.py` (see below); the CLI is just one consumer of it.
 - `to_proto_value` / `from_proto_value` are the public escape hatch for raw
   value encoding.
 
 Adding a new data type is a one-line change to `_FIELD_MAP`.
+
+## String coercion (`coercion.py`)
+
+`coercion.py` is the sibling of `codec.py` for the *other* direction: turning
+strings (from a CSV file, a config file, or the CLI) into native Python values.
+`coerce_value(value, data_type)` handles booleans, numbers and arrays; non-string
+values pass through unchanged. `coerce_values(values, data_types)` applies it to
+a `{path: value}` mapping. The clients expose `coerce_updates(values)`, which
+resolves each path's data type via the metadata cache and then coerces.
+
+The split is deliberate: `codec.py` stays strict (no casting), while `coercion.py`
+owns the fuzziness of string parsing so the two concerns don't leak into each
+other.
 
 ## Metadata caching (`metadata.py`)
 

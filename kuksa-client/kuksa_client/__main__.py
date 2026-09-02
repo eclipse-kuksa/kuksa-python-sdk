@@ -40,12 +40,12 @@ from pygments import lexers
 
 from kuksa_client import _metadata
 from kuksa_client.kuksa_logger import KuksaLogger
-from kuksa_client.v2 import DataType
 from kuksa_client.v2 import EntryType
 from kuksa_client.v2 import KuksaClient
 from kuksa_client.v2 import KuksaError
 from kuksa_client.v2 import NotFound
 from kuksa_client.v2 import Provider
+from kuksa_client.v2.coercion import coerce_value
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 
@@ -58,75 +58,8 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Value coercion (CLI layer only)
+# Value coercion (thin wrapper over kuksa_client.v2.coercion)
 # ---------------------------------------------------------------------------
-
-_BOOL_TRUE = {"true", "t", "1", "yes", "on"}
-_BOOL_FALSE = {"false", "f", "0", "no", "off"}
-_INT_TYPES = {
-    DataType.INT8,
-    DataType.INT16,
-    DataType.INT32,
-    DataType.INT64,
-    DataType.UINT8,
-    DataType.UINT16,
-    DataType.UINT32,
-    DataType.UINT64,
-}
-_FLOAT_TYPES = {DataType.FLOAT, DataType.DOUBLE}
-_INT_ARRAYS = {
-    DataType.INT8_ARRAY,
-    DataType.INT16_ARRAY,
-    DataType.INT32_ARRAY,
-    DataType.INT64_ARRAY,
-    DataType.UINT8_ARRAY,
-    DataType.UINT16_ARRAY,
-    DataType.UINT32_ARRAY,
-    DataType.UINT64_ARRAY,
-}
-_FLOAT_ARRAYS = {DataType.FLOAT_ARRAY, DataType.DOUBLE_ARRAY}
-
-
-def _parse_array(text, data_type):
-    stripped = text.strip()
-    if stripped.startswith("[") and stripped.endswith("]"):
-        stripped = stripped[1:-1]
-    items = [item.strip() for item in stripped.split(",") if item.strip() != ""]
-    if data_type == DataType.STRING_ARRAY:
-        def cast(s):
-            return s.strip("\"'")
-    elif data_type == DataType.BOOLEAN_ARRAY:
-        cast = _coerce_bool
-    elif data_type in _INT_ARRAYS:
-        cast = int
-    elif data_type in _FLOAT_ARRAYS:
-        cast = float
-    else:
-        cast = str
-    return [cast(item) for item in items]
-
-
-def _coerce_bool(text):
-    lowered = text.strip().lower()
-    if lowered in _BOOL_TRUE:
-        return True
-    if lowered in _BOOL_FALSE:
-        return False
-    raise ValueError(f"Invalid boolean value: {text}")
-
-
-def coerce_value(text, data_type):
-    if data_type is None or data_type == DataType.UNSPECIFIED:
-        return text
-    if data_type == DataType.BOOLEAN:
-        return _coerce_bool(text)
-    if data_type in _FLOAT_TYPES:
-        return float(text)
-    if data_type in _INT_TYPES:
-        return int(text)
-    if data_type.name.endswith("_ARRAY"):
-        return _parse_array(text, data_type)
-    return text
 
 
 def coerce_assignments(client, assignments):

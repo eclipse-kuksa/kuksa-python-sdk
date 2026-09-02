@@ -32,8 +32,11 @@ from typing import Optional
 import grpc
 from kuksa.val.v2 import val_pb2_grpc
 
+from . import coercion
 from . import patterns
 from . import transport
+from .coercion import coerce_value
+from .coercion import coerce_values
 from .core import _KuksaCore
 from .errors import Aborted
 from .errors import AlreadyExists
@@ -64,6 +67,8 @@ __all__ = [
     "Metadata",
     "ValueRestriction",
     "ServerInfo",
+    "coerce_value",
+    "coerce_values",
     "KuksaError",
     "KuksaTransportError",
     "KuksaStreamError",
@@ -238,6 +243,18 @@ class KuksaClient(_KuksaCore):
             path: (value if isinstance(value, Datapoint) else Datapoint(value=value))
             for path, value in values.items()
         }
+
+    def coerce_updates(self, values: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Coerce string values to each signal's data type.
+
+        ``values`` maps signal paths to values (typically strings, e.g. from a
+        CSV file). The data type of every path is resolved from the databroker
+        and cached, then each value is coerced accordingly. Non-string values
+        are returned unchanged.
+        """
+        data_types = self._resolve_data_types(values.keys())
+        return coercion.coerce_values(values, data_types)
 
     def get(self, path_or_paths):
         """

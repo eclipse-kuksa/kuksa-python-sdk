@@ -108,6 +108,29 @@ with KuksaClient("127.0.0.1", 55555) as client:
     client.actuate({"Vehicle.Body.Windshield.Front.Wiping.System.TargetPosition": 45})
 ```
 
+### String / external data
+
+`set`/`actuate` expect native Python values. For data that arrives as strings
+(CSV, config files, JSON, ...) use the coercion helpers instead of parsing by
+hand:
+
+```python
+from kuksa_client.v2 import KuksaClient, DataType, coerce_value
+
+with KuksaClient("127.0.0.1", 55555) as client:
+    # explicit: fetch the type, then coerce
+    data_type = client.get_metadata("Vehicle.ParkingBrake.IsEngaged").data_type
+    client.actuate({"Vehicle.ParkingBrake.IsEngaged": coerce_value("false", data_type)})
+
+    # convenient: let the client resolve types from metadata
+    client.set(client.coerce_updates({"Vehicle.Speed": "42.5"}))
+```
+
+`coerce_value` parses booleans (`true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`,
+case-insensitive), numbers (`int`/`float`), and arrays (`"[1,2,3]"` or
+`"1,2,3"`). Non-string values are returned unchanged. `coerce_values` does the
+same for a `{path: value}` mapping given a `{path: DataType}` mapping.
+
 ### Metadata
 
 ```python
