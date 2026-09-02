@@ -30,10 +30,21 @@ def _build_credentials(root_certificates: Optional[Path]):
     return grpc.ssl_channel_credentials(root_certificates.read_bytes())
 
 
-def _channel_options(tls_server_name: Optional[str]):
+def _channel_options(
+    tls_server_name: Optional[str] = None, unix_socket: Optional[Path] = None
+):
+    options = []
     if tls_server_name:
-        return [("grpc.ssl_target_name_override", tls_server_name)]
-    return None
+        options.append(("grpc.ssl_target_name_override", tls_server_name))
+    if unix_socket is not None:
+        options.append(("grpc.default_authority", "localhost"))
+    return options or None
+
+
+def _target(host: str, port: int, unix_socket: Optional[Path]) -> str:
+    if unix_socket is not None:
+        return f"unix:{unix_socket}"
+    return f"{host}:{port}"
 
 
 def create_sync_channel(
@@ -41,12 +52,14 @@ def create_sync_channel(
     port: int,
     root_certificates: Optional[Path] = None,
     tls_server_name: Optional[str] = None,
+    unix_socket: Optional[Path] = None,
 ) -> grpc.Channel:
-    target = f"{host}:{port}"
+    target = _target(host, port, unix_socket)
     credentials = _build_credentials(root_certificates)
+    options = _channel_options(tls_server_name, unix_socket)
     if credentials is not None:
-        return grpc.secure_channel(target, credentials, _channel_options(tls_server_name))
-    return grpc.insecure_channel(target)
+        return grpc.secure_channel(target, credentials, options)
+    return grpc.insecure_channel(target, options)
 
 
 def create_aio_channel(
@@ -54,11 +67,11 @@ def create_aio_channel(
     port: int,
     root_certificates: Optional[Path] = None,
     tls_server_name: Optional[str] = None,
+    unix_socket: Optional[Path] = None,
 ) -> grpc.aio.Channel:
-    target = f"{host}:{port}"
+    target = _target(host, port, unix_socket)
     credentials = _build_credentials(root_certificates)
+    options = _channel_options(tls_server_name, unix_socket)
     if credentials is not None:
-        return grpc.aio.secure_channel(
-            target, credentials, _channel_options(tls_server_name)
-        )
-    return grpc.aio.insecure_channel(target)
+        return grpc.aio.secure_channel(target, credentials, options)
+    return grpc.aio.insecure_channel(target, options)

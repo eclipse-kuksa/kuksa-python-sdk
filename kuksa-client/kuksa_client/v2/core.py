@@ -60,6 +60,7 @@ class _KuksaCore:
         token: Optional[str] = None,
         root_certificates: Optional[Path] = None,
         tls_server_name: Optional[str] = None,
+        unix_socket: Optional[Path] = None,
         ensure_startup_connection: bool = True,
     ):
         self.host = host
@@ -67,6 +68,7 @@ class _KuksaCore:
         self.token = token
         self.root_certificates = root_certificates
         self.tls_server_name = tls_server_name
+        self.unix_socket = unix_socket
         self.ensure_startup_connection = ensure_startup_connection
         self._authorization_header = self._get_authorization_header(token)
         self._metadata_store = MetadataStore()
