@@ -108,6 +108,23 @@ with KuksaClient("127.0.0.1", 55555) as client:
     client.actuate({"Vehicle.Body.Windshield.Front.Wiping.System.TargetPosition": 45})
 ```
 
+`get` returns different shapes depending on its argument — a single
+`Datapoint` for one path, or a `{path: Datapoint}` dict for several. Iterate
+the dict when you have multiple signals:
+
+```python
+from kuksa_client.v2 import KuksaClient
+
+with KuksaClient("127.0.0.1", 55555) as client:
+    datapoint = client.get("Vehicle.Speed")            # single path -> Datapoint
+    print(datapoint.value)                             # 42.0
+    print(datapoint.timestamp)                         # datetime.datetime(...)
+
+    datapoints = client.get(["Vehicle.Speed", "Vehicle.ADAS.ABS.IsActive"])
+    for path, datapoint in datapoints.items():         # several paths -> dict
+        print(f"{path} = {datapoint.value}")
+```
+
 ### String / external data
 
 `set`/`actuate` expect native Python values. For data that arrives as strings
@@ -136,6 +153,18 @@ same for a `{path: value}` mapping given a `{path: DataType}` mapping.
 ```python
 md = client.get_metadata("Vehicle.Speed")     # -> Metadata (raises NotFound)
 tree = client.list_metadata("Vehicle.Cabin")  # -> list[Metadata]
+```
+
+`Metadata.data_type` and `Metadata.entry_type` are `IntEnum`s, so printing
+them shows an integer. Use `.name` for the human-readable member name:
+
+```python
+md = client.get_metadata("Vehicle.Speed")
+print(md.data_type)           # 11 (IntEnum -> prints its int value)
+print(md.data_type.name)      # 'FLOAT'
+print(md.entry_type.name)     # 'SENSOR'
+print(md.unit)                # 'km/h'
+print(md.description)
 ```
 
 ### Wildcards and path expansion
