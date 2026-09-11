@@ -40,7 +40,7 @@ Available one-shot commands:
 | `set <Path=Value...>` | Set values (e.g. `Vehicle.Speed=42`) |
 | `actuate <Path=Value...>` | Actuate actuators (e.g. `Vehicle.Body.Wiper.Pos=45`) |
 | `subscribe <path...>` | Subscribe to one or more paths (wildcards are expanded) |
-| `mock-actuator <path...>` | Provide a mock actuator that accepts and prints received actuations (until terminated) |
+| `mock-actuator [-l] <path...>` | Provide a mock actuator that accepts and prints received actuations (until terminated); `-l`/`--loopback` also sets the received value as the current value |
 | `get-metadata <path>` | Get the metadata of a path |
 | `list-metadata <pattern>` | List metadata matching a pattern |
 | `has-signal <path>` | Check whether a signal exists |
@@ -60,7 +60,7 @@ Available one-shot commands:
 | `subscribe <path...>` | Subscribe to updates (wildcards are expanded) |
 | `subscribe -b <path...>` | Subscribe in the background; updates print as alerts while the prompt stays usable |
 | `unsubscribe <id>` | Stop a background subscription |
-| `mock_actuator <path...>` | Register a mock provider that accepts and prints actuations |
+| `mock_actuator [-l] <path...>` | Register a mock provider that accepts and prints actuations; `-l`/`--loopback` also sets the received value as the current value |
 | `remove_mock <id>` | Remove a mock actuator provider |
 | `get_metadata <path>` | Get the metadata of a path |
 | `list_metadata <pattern>` | List metadata matching a pattern |

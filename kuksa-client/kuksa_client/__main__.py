@@ -189,6 +189,7 @@ class _MockActuator:
     paths: list
     provider: object = None
     thread: threading.Thread = None
+    loopback: bool = False
 
 
 class KuksaShell(Cmd):
@@ -251,6 +252,12 @@ class KuksaShell(Cmd):
         help="Actuator path to provide",
         nargs="+",
         completer=path_completer,
+    )
+    ap_mock_actuator.add_argument(
+        "-l",
+        "--loopback",
+        action="store_true",
+        help="Also set the received value as the signal's current value",
     )
 
     ap_remove_mock = Cmd2ArgumentParser()
@@ -589,19 +596,23 @@ class KuksaShell(Cmd):
             mock_id = self._mock_counter
         thread = threading.Thread(
             target=self._mock_actuator_loop,
-            args=(mock_id, provider),
+            args=(mock_id, provider, client, args.loopback),
             daemon=True,
         )
         with self._mock_lock:
             self._mocks[mock_id] = _MockActuator(
-                paths=list(args.Path), provider=provider, thread=thread
+                paths=list(args.Path),
+                provider=provider,
+                thread=thread,
+                loopback=args.loopback,
             )
         thread.start()
         print(f"Registered mock actuator {mock_id} for {', '.join(args.Path)}")
 
-    def _mock_actuator_loop(self, mock_id, provider):
+    def _mock_actuator_loop(self, mock_id, provider, client=None, loopback=False):
         try:
             for requests in provider.actuation_requests():
+                updates = {}
                 for request in requests:
                     message = highlight(
                         json.dumps(
@@ -617,6 +628,13 @@ class KuksaShell(Cmd):
                         provider.accept(request, ok=True)
                     except Exception:
                         pass
+                    if loopback:
+                        updates[request.path] = request.value
+                if loopback and updates and client is not None:
+                    try:
+                        client.set(updates)
+                    except Exception as exc:
+                        self.add_alert(msg=f"Loopback error: {exc}")
         except Exception:
             # The stream was terminated, e.g. by a disconnect or removal.
             pass
@@ -746,8 +764,17 @@ def _build_one_shot_parser():
     p_sub = subparsers.add_parser("subscribe", help="Subscribe to one or more paths")
     p_sub.add_argument("paths", nargs="+")
 
-    p_mock = subparsers.add_parser("mock-actuator", help="Provide a mock actuator that prints received actuations")
+    p_mock = subparsers.add_parser(
+        "mock-actuator",
+        help="Provide a mock actuator that prints received actuations",
+    )
     p_mock.add_argument("paths", nargs="+", help="Actuator paths to provide")
+    p_mock.add_argument(
+        "-l",
+        "--loopback",
+        action="store_true",
+        help="Also set the received value as the signal's current value",
+    )
 
     p_md = subparsers.add_parser("get-metadata", help="Get the metadata of a path")
     p_md.add_argument("path")
@@ -822,6 +849,7 @@ def _run_one_shot(args):
                 provider.provide_actuators(args.paths)
                 try:
                     for requests in provider.actuation_requests():
+                        updates = {}
                         for request in requests:
                             print(
                                 json.dumps(
@@ -830,6 +858,13 @@ def _run_one_shot(args):
                                 )
                             )
                             provider.accept(request, ok=True)
+                            if args.loopback:
+                                updates[request.path] = request.value
+                        if args.loopback and updates:
+                            try:
+                                client.set(updates)
+                            except Exception as exc:
+                                print(f"Loopback error: {exc}", file=sys.stderr)
                 except KeyboardInterrupt:
                     pass
                 finally:
