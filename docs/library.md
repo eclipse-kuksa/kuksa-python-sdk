@@ -1,44 +1,275 @@
 # Using KUKSA Python SDK as Library
 
+The `kuksa-client` package provides two generations of APIs:
 
-## Usage
+- **`kuksa_client.v2`** — the redesigned, Pythonic client for the `kuksa.val.v2`
+  protocol (this document).
+- **Legacy APIs** (`kuksa_client.grpc`, `kuksa_client.grpc.aio`,
+  `kuksa_client.KuksaClientThread`) — frozen and deprecated, kept for backwards
+  compatibility. See [the migration notes](#migrating-from-the-legacy-api).
 
-The kuksa-client package needs to be installed with `pip`. Then the package can be imported:
+## Install
+
+```console
+pip install kuksa-client
+```
+
+## The `kuksa_client.v2` API
+
+The new SDK targets `kuksa.val.v2` only and comes in two flavours that mirror
+each other 1:1:
+
+- `kuksa_client.v2.KuksaClient` — synchronous
+- `kuksa_client.v2.aio.KuksaClient` — asynchronous (asyncio)
+
+The public surface is available from `kuksa_client.v2`:
 
 ```python
->>> import kuksa_client
->>> kuksa_client.__version__
-'<your version, e.g. 0.1.7>'
+from kuksa_client.v2 import KuksaClient, DataType, Datapoint, Provider
 ```
 
-## Available APIs
+### Quick start (synchronous)
 
-This package holds 3 different APIs depending on your application's requirements:
+```python
+from kuksa_client.v2 import KuksaClient
 
-- `kuksa_client.grpc.aio.VSSClient` provides an asynchronous client that only supports `grpc` to interact with `kuksa_databroker`
-  ([check out examples](examples/async-grpc.md)).
-- `kuksa_client.grpc.VSSClient` provides a synchronous client that only supports `grpc` to interact with `kuksa_databroker`
-  ([check out examples](examples/sync-grpc.md)).
-- `kuksa_client.KuksaClientThread` provides a thread-based client that supports both `ws` and `grpc` to interact with either `kuksa-val-server` or `kuksa_databroker`
-  ([check out examples](examples/threaded.md)).
+with KuksaClient("127.0.0.1", 55555) as client:
+    speed = client.get("Vehicle.Speed")          # -> Datapoint
+    print(speed.value)
 
+    client.set({"Vehicle.Speed": 42})            # native values, type auto-resolved
 
-## TLS configuration
+    values = client.get(["Vehicle.Speed", "Vehicle.ADAS.ABS.IsActive"])  # -> dict
 
-Clients like [KUKSA CAN Provider](https://github.com/eclipse-kuksa/kuksa-can-provider)
-that use KUKSA Client library must typically set the path to the root CA certificate.
-If the path is set the VSSClient will try to establish a secure connection.
-
+    for updates in client.subscribe(["Vehicle.Speed"]):
+        print(updates["Vehicle.Speed"].value)
 ```
-# Shall TLS be used (default False for Databroker, True for KUKSA Server)
-# tls = False
-tls = True
 
-# TLS-related settings
-# Path to root CA, needed if using TLS
-root_ca_path=../../kuksa.val/kuksa_certificates/CA.pem
-# Server name, typically only needed if accessing server by IP address like 127.0.0.1
-# and typically only if connection to KUKSA Databroker
-# If using KUKSA example certificates the names "Server" or "localhost" can be used.
-# tls_server_name=Server
+The asynchronous client is identical, except methods are `await`ed and
+subscriptions are `async for` loops:
+
+```python
+import asyncio
+from kuksa_client.v2.aio import KuksaClient
+
+async def main():
+    async with KuksaClient("127.0.0.1", 55555) as client:
+        speed = await client.get("Vehicle.Speed")
+        await client.set({"Vehicle.Speed": 42})
+        async for updates in client.subscribe(["Vehicle.Speed"]):
+            print(updates["Vehicle.Speed"].value)
+
+asyncio.run(main())
 ```
+
+## Client reference
+
+### Connection
+
+```python
+KuksaClient(
+    host="127.0.0.1",
+    port=55555,
+    token=None,               # optional JWT token
+    root_certificates=None,   # optional pathlib.Path to a CA for TLS
+    tls_server_name=None,     # optional TLS server name override
+    unix_socket=None,         # optional path to a unix domain socket (ignores host/port)
+)
+```
+
+Both clients are context managers; entering them connects, exiting disconnects.
+You may also call `connect()` / `disconnect()` explicitly.
+
+To connect over a unix domain socket, pass `unix_socket`:
+
+```python
+with KuksaClient(unix_socket="/tmp/kuksa.sock") as client:
+    ...
+```
+
+### Values (`get` / `set`)
+
+- `get(path)` returns a `Datapoint`. A non-existent path raises `NotFound`;
+  a path that exists but has no data yet returns `Datapoint(value=None)`.
+- `get([paths...]) -> Dict[str, Datapoint]` is all-or-nothing: if any path is
+  missing the whole call raises and returns nothing.
+- `set(values, data_type=None)` publishes native values (or `Datapoint`s).
+  Types are resolved via `ListMetadata` and cached; pass `data_type` to skip the
+  lookup.
+- `actuate(values, data_type=None)` sends actuator target values.
+
+```python
+from kuksa_client.v2 import KuksaClient, DataType, Datapoint
+
+with KuksaClient("127.0.0.1", 55555) as client:
+    client.set({"Vehicle.Speed": 42})                       # auto-resolve type
+    client.set({"Vehicle.Speed": 42}, data_type=DataType.FLOAT)
+    client.set({"Vehicle.Speed": Datapoint(42)})
+    client.actuate({"Vehicle.Body.Windshield.Front.Wiping.System.TargetPosition": 45})
+```
+
+`get` returns different shapes depending on its argument — a single
+`Datapoint` for one path, or a `{path: Datapoint}` dict for several. Iterate
+the dict when you have multiple signals:
+
+```python
+from kuksa_client.v2 import KuksaClient
+
+with KuksaClient("127.0.0.1", 55555) as client:
+    datapoint = client.get("Vehicle.Speed")            # single path -> Datapoint
+    print(datapoint.value)                             # 42.0
+    print(datapoint.timestamp)                         # datetime.datetime(...)
+
+    datapoints = client.get(["Vehicle.Speed", "Vehicle.ADAS.ABS.IsActive"])
+    for path, datapoint in datapoints.items():         # several paths -> dict
+        print(f"{path} = {datapoint.value}")
+```
+
+### String / external data
+
+`set`/`actuate` expect native Python values. For data that arrives as strings
+(CSV, config files, JSON, ...) use the coercion helpers instead of parsing by
+hand:
+
+```python
+from kuksa_client.v2 import KuksaClient, DataType, coerce_value
+
+with KuksaClient("127.0.0.1", 55555) as client:
+    # explicit: fetch the type, then coerce
+    data_type = client.get_metadata("Vehicle.ParkingBrake.IsEngaged").data_type
+    client.actuate({"Vehicle.ParkingBrake.IsEngaged": coerce_value("false", data_type)})
+
+    # convenient: let the client resolve types from metadata
+    client.set(client.coerce_updates({"Vehicle.Speed": "42.5"}))
+```
+
+`coerce_value` parses booleans (`true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`,
+case-insensitive), numbers (`int`/`float`), and arrays (`"[1,2,3]"` or
+`"1,2,3"`). Non-string values are returned unchanged. `coerce_values` does the
+same for a `{path: value}` mapping given a `{path: DataType}` mapping.
+
+### Metadata
+
+```python
+md = client.get_metadata("Vehicle.Speed")     # -> Metadata (raises NotFound)
+tree = client.list_metadata("Vehicle.Cabin")  # -> list[Metadata]
+```
+
+`Metadata.data_type` and `Metadata.entry_type` are `IntEnum`s, so printing
+them shows an integer. Use `.name` for the human-readable member name:
+
+```python
+md = client.get_metadata("Vehicle.Speed")
+print(md.data_type)           # 11 (IntEnum -> prints its int value)
+print(md.data_type.name)      # 'FLOAT'
+print(md.entry_type.name)     # 'SENSOR'
+print(md.unit)                # 'km/h'
+print(md.description)
+```
+
+### Wildcards and path expansion
+
+`get`/`set`/`subscribe` operate on exact paths only. To work with a branch use
+`expand()` to obtain concrete leaf paths first:
+
+```python
+paths = client.expand("**.TyrePressure")                  # -> list[str]
+sensors = client.expand("Vehicle.**", entry_type=EntryType.SENSOR)
+client.subscribe(client.expand("**.TyrePressure"))
+```
+
+`*` matches exactly one path segment, `**` matches zero or more segments.
+
+### Signal availability
+
+```python
+client.has_signal("Vehicle.Speed")                        # -> bool
+client.has_signals(["Vehicle.Speed", "Vehicle.NoSuch"])   # -> bool
+client.missing_signals(["Vehicle.Speed", "Vehicle.NoSuch"])  # -> set[str]
+```
+
+### Authorization and server info
+
+```python
+client.authorize(token)                 # attach token to subsequent requests
+info = client.get_server_info()         # -> ServerInfo(name, version, commit_hash)
+```
+
+### Subscribing and unsubscribing
+
+`subscribe(paths)` returns an iterator (sync) / async iterator (async). The
+current value of every subscribed signal is yielded immediately, followed by
+batches of updates.
+
+To **unsubscribe**, break out of the loop (or drop the iterator); the underlying
+stream is cancelled automatically.
+
+```python
+# synchronous
+for updates in client.subscribe(["Vehicle.Speed"]):
+    print(updates)
+    if done:
+        break            # unsubscribe
+```
+
+```python
+# asynchronous
+async for updates in client.subscribe(["Vehicle.Speed"]):
+    print(updates)
+    if done:
+        break            # unsubscribe (or: await sub.aclose())
+```
+
+## Providers
+
+A provider claims signals/actuators, publishes values at high frequency and
+receives actuation requests:
+
+```python
+from kuksa_client.v2 import KuksaClient, DataType, Provider
+
+with KuksaClient("127.0.0.1", 55555) as client:
+    provider = Provider(client)
+    provider.provide_signals({"Vehicle.Speed": None})      # path -> sample interval (ms)
+    provider.publish({"Vehicle.Speed": 42.5})
+
+    provider.provide_actuators(["Vehicle.Body.Windshield.Front.Wiping.System.TargetPosition"])
+    for requests in provider.actuation_requests():
+        for request in requests:
+            print(f"Actuate {request.path} to {request.value}")
+            provider.accept(request, ok=True)
+    provider.close()
+```
+
+## Escape hatch
+
+Power users can reach the raw `kuksa.val.v2` gRPC stub and codec:
+
+```python
+client.stub                      # the raw VALStub
+from kuksa_client.v2 import codec
+codec.to_proto_value(42, DataType.FLOAT)   # native -> proto
+codec.from_proto_value(...)                # proto -> native
+```
+
+## Migrating from the legacy API
+
+| Legacy (`kuksa_client.grpc`) | New (`kuksa_client.v2`) |
+|------------------------------|--------------------------|
+| `get_current_values([...])`  | `get([...])`             |
+| `set_current_values({...})`  | `set({...})`             |
+| `get_target_values([...])`   | `actuate({...})`         |
+| `set_target_values({...})`   | `actuate({...})`         |
+| `get_metadata([...])`        | `get_metadata(path)` / `list_metadata(pattern)` |
+| `subscribe_current_values([...])` | `subscribe([...])`   |
+| `updateVSSTree` / `updateMetaData` | dropped (metadata is read-only in v2) |
+| `VSSClient`                  | `KuksaClient`            |
+
+The legacy APIs remain available but emit a `DeprecationWarning`. Their
+examples are kept under [`examples/legacy/`](examples/legacy/).
+
+## Further reading
+
+- [`architecture.md`](architecture.md) — how the `kuksa_client.v2` library is
+  structured and its design patterns.
+- [`Redesign.md`](../Redesign.md) — the design decisions behind the redesign.
