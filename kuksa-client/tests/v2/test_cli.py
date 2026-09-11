@@ -340,6 +340,14 @@ class _FakeProvider:
         self.closed = True
 
 
+class _FakeLoopbackClient:
+    def __init__(self):
+        self.sets = []
+
+    def set(self, updates):
+        self.sets.append(updates)
+
+
 def test_remove_mock_completer():
     shell = _alert_shell()
     shell._mocks = {
@@ -379,3 +387,23 @@ def test_mock_actuator_loop_accepts_and_alerts():
     assert "Vehicle.Body.Wiper.Pos" in shell._alert_queue[0].msg
     assert "45.0" in shell._alert_queue[0].msg
     assert provider.accepted == [request]
+
+
+def test_mock_actuator_loop_loopback_sets_values():
+    shell = _alert_shell()
+    request = _FakeRequest("Vehicle.Body.Wiper.Pos", 45.0)
+    provider = _FakeProvider(batches=[[request]])
+    client = _FakeLoopbackClient()
+    KuksaShell._mock_actuator_loop(shell, 1, provider, client, loopback=True)
+    assert provider.accepted == [request]
+    assert client.sets == [{"Vehicle.Body.Wiper.Pos": 45.0}]
+
+
+def test_mock_actuator_loop_without_loopback_does_not_set_values():
+    shell = _alert_shell()
+    request = _FakeRequest("Vehicle.Body.Wiper.Pos", 45.0)
+    provider = _FakeProvider(batches=[[request]])
+    client = _FakeLoopbackClient()
+    KuksaShell._mock_actuator_loop(shell, 1, provider, client, loopback=False)
+    assert provider.accepted == [request]
+    assert client.sets == []
