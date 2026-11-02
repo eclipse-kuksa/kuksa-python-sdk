@@ -49,7 +49,7 @@ pygments==2.21.0
     #   kuksa_client (setup.cfg)
     #   pytest
     #   rich
-pylint==4.0.7
+pylint==4.0.9
     # via kuksa_client (setup.cfg)
 pyperclip==1.11.0
     # via cmd2
