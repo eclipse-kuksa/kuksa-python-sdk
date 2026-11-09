@@ -11,6 +11,16 @@ from kuksa_client.v2 import KuksaClient
 from kuksa_client.v2 import Provider
 
 
+def _wait_for_value(client, path, expected, timeout=5.0):
+    """Wait until a published value becomes visible in the databroker."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if client.get(path).value == expected:
+            return
+        time.sleep(0.01)
+    assert client.get(path).value == expected
+
+
 class _BlockingBidiStream:
     def __init__(self):
         self.cancelled = False
@@ -60,7 +70,7 @@ def test_provider_publish(server):
         try:
             provider.provide_signals({"Vehicle.Speed": None})
             provider.publish({"Vehicle.Speed": 42.5})
-            assert client.get("Vehicle.Speed").value == 42.5
+            _wait_for_value(client, "Vehicle.Speed", 42.5)
         finally:
             provider.close()
 
