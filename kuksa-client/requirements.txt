@@ -4,15 +4,13 @@
 #
 #    pip-compile setup.cfg
 #
-cmd2==4.2.1
+cmd2==4.4.1
     # via kuksa_client (setup.cfg)
-gnureadline==8.3.3 ; sys_platform == "darwin"
-    # via kuksa_client (setup.cfg)
-grpcio==1.83.0
+grpcio==1.85.1
     # via grpcio-tools
 grpcio-tools==1.82.1
     # via kuksa_client (setup.cfg)
-jsonpath-ng==1.8.0
+jsonpath-ng==1.16.0
     # via kuksa_client (setup.cfg)
 markdown-it-py==4.2.0
     # via rich
@@ -20,7 +18,7 @@ mdurl==0.1.2
     # via markdown-it-py
 prompt-toolkit==3.0.53
     # via cmd2
-protobuf==7.36.0
+protobuf==7.36.2
     # via
     #   grpcio-tools
     #   kuksa_client (setup.cfg)
@@ -38,9 +36,9 @@ rich-argparse==1.8.0
     # via cmd2
 typing-extensions==4.16.0
     # via grpcio
-wcwidth==0.8.2
+wcwidth==0.9.4
     # via prompt-toolkit
-websockets==17.0.1
+websockets==17.4
     # via kuksa_client (setup.cfg)
 
 # The following packages are considered to be unsafe in a requirements file:
